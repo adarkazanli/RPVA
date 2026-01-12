@@ -118,17 +118,29 @@ def main() -> int:
         logger.info(f"TTS voice: {config.tts.voice}")
         return 0
 
+    # Check network status
+    from .router.mode import NetworkMonitor, NetworkStatus
+
+    network_monitor = NetworkMonitor()
+    network_status = network_monitor.check_connectivity()
+    mode_indicator = (
+        "ONLINE" if network_status == NetworkStatus.ONLINE else "OFFLINE"
+    )
+
     # Print startup banner
     print("\n" + "=" * 50)
     print("  Ara Voice Assistant")
     print("=" * 50)
     print(f"  Version: {__version__}")
     print(f"  Profile: {args.profile or detect_profile().value}")
+    print(f"  Mode: {mode_indicator}")
     print(f"  Wake word: {config.wake_word.keyword}")
     print(f"  STT: {config.stt.model} ({config.stt.device})")
     print(f"  LLM: {config.llm.model}")
     print(f"  TTS: {config.tts.voice}")
     print("=" * 50 + "\n")
+
+    logger.info(f"Network status: {network_status.value}")
 
     # Initialize orchestrator
     logger.info("Initializing voice assistant components...")

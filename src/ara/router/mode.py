@@ -3,11 +3,13 @@
 Provides connectivity detection, mode switching, and routing decisions.
 """
 
+import json
 import socket
 import threading
 import time
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
 from typing import Callable
 
 
@@ -145,21 +147,37 @@ class ModeManager:
     network status and user preferences.
     """
 
+    # Human-readable mode descriptions
+    MODE_DESCRIPTIONS: dict[OperationMode, str] = {
+        OperationMode.OFFLINE: "I'm currently in offline mode. All processing is done locally.",
+        OperationMode.ONLINE_LOCAL: "I'm online but using local processing. Cloud features are available on request.",
+        OperationMode.ONLINE_CLOUD: "I'm in cloud mode. Complex queries are processed using cloud services.",
+    }
+
     def __init__(
         self,
         network_monitor: NetworkMonitor,
         default_mode: OperationMode = OperationMode.OFFLINE,
+        preferences_path: Path | None = None,
+        on_mode_change: Callable[[OperationMode, OperationMode], None] | None = None,
+        auto_mode_switching: bool = False,
     ) -> None:
         """Initialize the mode manager.
 
         Args:
             network_monitor: Network monitor instance.
             default_mode: Initial operation mode.
+            preferences_path: Path to store user preferences.
+            on_mode_change: Callback when mode changes (old, new).
+            auto_mode_switching: Automatically switch modes based on network status.
         """
         self._network_monitor = network_monitor
         self._mode = default_mode
         self._forced_offline = False
         self._cloud_complexity_threshold = 0.7
+        self._preferences_path = preferences_path
+        self._on_mode_change = on_mode_change
+        self._auto_mode_switching = auto_mode_switching
 
     @property
     def mode(self) -> OperationMode:
@@ -177,21 +195,34 @@ class ModeManager:
         Args:
             mode: New operation mode.
         """
+        old_mode = self._mode
+        if mode == old_mode:
+            return  # No change
+
         self._mode = mode
         if mode != OperationMode.OFFLINE:
             self._forced_offline = False
 
+        # Notify callback
+        self._notify_mode_change(old_mode, mode)
+
     def go_offline(self) -> None:
         """Force offline mode."""
+        old_mode = self._mode
         self._mode = OperationMode.OFFLINE
         self._forced_offline = True
+        if old_mode != OperationMode.OFFLINE:
+            self._notify_mode_change(old_mode, OperationMode.OFFLINE)
 
     def go_online(self) -> None:
         """Switch to online mode if network available."""
+        old_mode = self._mode
         self._forced_offline = False
 
         if self._network_monitor.is_online:
             self._mode = OperationMode.ONLINE_LOCAL
+            if old_mode != OperationMode.ONLINE_LOCAL:
+                self._notify_mode_change(old_mode, OperationMode.ONLINE_LOCAL)
         # If not online, stay in current mode
 
     def should_use_cloud(self, explicit_request: bool = False) -> bool:
@@ -243,6 +274,93 @@ class ModeManager:
             return True
 
         return False
+
+    def get_status(self) -> dict[str, str | bool]:
+        """Get comprehensive status information.
+
+        Returns:
+            Dictionary with mode, network_status, and forced_offline.
+        """
+        return {
+            "mode": self._mode.value,
+            "network_status": self._network_monitor.status.value,
+            "forced_offline": self._forced_offline,
+        }
+
+    def get_mode_description(self) -> str:
+        """Get human-readable mode description.
+
+        Returns:
+            Description string for current mode.
+        """
+        return self.MODE_DESCRIPTIONS.get(
+            self._mode,
+            f"Current mode: {self._mode.value}",
+        )
+
+    def save_preferences(self) -> None:
+        """Save mode preferences to file."""
+        if self._preferences_path is None:
+            return
+
+        data = {"mode": self._mode.value}
+        try:
+            self._preferences_path.parent.mkdir(parents=True, exist_ok=True)
+            self._preferences_path.write_text(json.dumps(data, indent=2))
+        except OSError:
+            pass  # Fail silently on save errors
+
+    def load_preferences(self) -> None:
+        """Load mode preferences from file."""
+        if self._preferences_path is None:
+            return
+
+        if not self._preferences_path.exists():
+            return
+
+        try:
+            data = json.loads(self._preferences_path.read_text())
+            mode_str = data.get("mode", "")
+            # Try to find matching mode
+            for mode in OperationMode:
+                if mode.value == mode_str:
+                    self._mode = mode
+                    return
+        except (json.JSONDecodeError, OSError):
+            pass  # Keep default mode on errors
+
+    def on_network_status_change(self, new_status: NetworkStatus) -> None:
+        """Handle network status change.
+
+        Args:
+            new_status: New network status.
+        """
+        if not self._auto_mode_switching:
+            return
+
+        if self._forced_offline:
+            return  # Don't auto-switch when user forced offline
+
+        old_mode = self._mode
+
+        if new_status == NetworkStatus.OFFLINE:
+            self._mode = OperationMode.OFFLINE
+            if old_mode != OperationMode.OFFLINE:
+                self._notify_mode_change(old_mode, OperationMode.OFFLINE)
+        elif new_status == NetworkStatus.ONLINE:
+            if self._mode == OperationMode.OFFLINE:
+                self._mode = OperationMode.ONLINE_LOCAL
+                self._notify_mode_change(old_mode, OperationMode.ONLINE_LOCAL)
+
+    def _notify_mode_change(
+        self, old_mode: OperationMode, new_mode: OperationMode
+    ) -> None:
+        """Notify callback of mode change."""
+        if self._on_mode_change is not None:
+            try:
+                self._on_mode_change(old_mode, new_mode)
+            except Exception:
+                pass  # Don't let callback errors crash
 
 
 __all__ = [

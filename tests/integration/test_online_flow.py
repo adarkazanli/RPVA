@@ -123,7 +123,7 @@ class TestGracefulDegradation:
         orchestrator._capture.set_audio_data(bytes(16000 * 2))
 
         # Simulate offline state
-        if hasattr(orchestrator, "_mode_manager"):
+        if orchestrator._mode_manager is not None:
             from ara.router.mode import NetworkStatus
 
             orchestrator._mode_manager._network_monitor._status = NetworkStatus.OFFLINE

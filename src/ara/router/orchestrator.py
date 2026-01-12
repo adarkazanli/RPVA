@@ -21,8 +21,10 @@ if TYPE_CHECKING:
     from ..stt.transcriber import Transcriber
     from ..tts.synthesizer import Synthesizer
     from ..wake_word.detector import WakeWordDetector
+    from .mode import ModeManager
 
 from ..commands.reminder import ReminderManager, parse_reminder_time, Recurrence
+from ..commands.system import SystemCommandHandler
 from ..commands.timer import TimerManager, parse_duration
 from ..feedback import FeedbackType
 from .intent import Intent, IntentClassifier, IntentType
@@ -65,15 +67,18 @@ class Orchestrator:
 
     def __init__(
         self,
-        audio_capture: "AudioCapture",
-        audio_playback: "AudioPlayback",
-        wake_word_detector: "WakeWordDetector",
-        transcriber: "Transcriber",
-        language_model: "LanguageModel",
-        synthesizer: "Synthesizer",
-        feedback: "AudioFeedback",
+        audio_capture: "AudioCapture | None" = None,
+        audio_playback: "AudioPlayback | None" = None,
+        wake_word_detector: "WakeWordDetector | None" = None,
+        transcriber: "Transcriber | None" = None,
+        language_model: "LanguageModel | None" = None,
+        synthesizer: "Synthesizer | None" = None,
+        feedback: "AudioFeedback | None" = None,
         interaction_logger: "InteractionLogger | None" = None,
         device_id: str = "default",
+        mode_manager: "ModeManager | None" = None,
+        # Simplified init for testing - just llm and feedback
+        llm: "LanguageModel | None" = None,
     ) -> None:
         """Initialize orchestrator with components.
 
@@ -82,21 +87,24 @@ class Orchestrator:
             audio_playback: Audio output playback
             wake_word_detector: Wake word detection
             transcriber: Speech-to-text
-            language_model: LLM for response generation
+            language_model: LLM for response generation (or use 'llm' for short)
             synthesizer: Text-to-speech
             feedback: Audio feedback sounds
             interaction_logger: Optional logger for interactions
             device_id: Device identifier for logging
+            mode_manager: Optional mode manager for system commands
+            llm: Alias for language_model (for convenience)
         """
         self._capture = audio_capture
         self._playback = audio_playback
         self._wake_word = wake_word_detector
         self._transcriber = transcriber
-        self._llm = language_model
+        self._llm = language_model or llm
         self._synthesizer = synthesizer
         self._feedback = feedback
         self._interaction_logger = interaction_logger
         self._device_id = device_id
+        self._mode_manager = mode_manager
 
         self._running = False
         self._thread: threading.Thread | None = None
@@ -106,6 +114,11 @@ class Orchestrator:
         self._intent_classifier = IntentClassifier()
         self._timer_manager = TimerManager(on_expire=self._on_timer_expire)
         self._reminder_manager = ReminderManager(on_trigger=self._on_reminder_trigger)
+
+        # System command handler (if mode manager is provided)
+        self._system_handler = (
+            SystemCommandHandler(mode_manager) if mode_manager else None
+        )
 
         # Background check thread for timers/reminders
         self._check_thread: threading.Thread | None = None
@@ -269,6 +282,19 @@ class Orchestrator:
                 error=str(e),
             )
 
+    def process(self, text: str) -> str:
+        """Process text input directly (useful for testing).
+
+        Args:
+            text: User text input
+
+        Returns:
+            Response text
+        """
+        interaction_id = uuid.uuid4()
+        intent = self._intent_classifier.classify(text)
+        return self._handle_intent(intent, interaction_id)
+
     def _handle_intent(self, intent: Intent, interaction_id: uuid.UUID) -> str:
         """Handle classified intent and generate response.
 
@@ -295,6 +321,8 @@ class Orchestrator:
             return self._handle_history_query(intent)
         elif intent.type == IntentType.WEB_SEARCH:
             return self._handle_web_search(intent)
+        elif intent.type == IntentType.SYSTEM_COMMAND:
+            return self._handle_system_command(intent)
         else:
             # Default to LLM for general questions
             llm_response = self._llm.generate(intent.raw_text)
@@ -521,6 +549,26 @@ class Orchestrator:
             logger.error(f"Web search failed: {e}, falling back to local LLM")
             llm_response = self._llm.generate(intent.raw_text)
             return llm_response.text.strip()
+
+    def _handle_system_command(self, intent: Intent) -> str:
+        """Handle system command intent.
+
+        Args:
+            intent: Classified system command intent.
+
+        Returns:
+            Response text.
+        """
+        command = intent.entities.get("command", "")
+
+        if not self._system_handler:
+            return "System commands are not available in this mode."
+
+        # Play mode change feedback for mode-changing commands
+        if command in ("offline", "online") and self._feedback:
+            self._feedback.play(FeedbackType.MODE_CHANGE)
+
+        return self._system_handler.handle(command)
 
     def _on_timer_expire(self, timer: "TimerManager") -> None:
         """Callback when a timer expires."""
