@@ -1,0 +1,44 @@
+# Ara Voice Assistant - Production Configuration
+# Settings for Raspberry Pi 4 deployment
+# Extends base.yaml
+
+extends: base.yaml
+
+ara:
+  # Production logging level
+  logging:
+    level: "INFO"
+
+  # Audio settings for Pi with ReSpeaker or USB mic
+  audio:
+    input_device: "default"  # Change to specific device if needed
+    output_device: "default"
+    # For ReSpeaker:
+    # input_device: "seeed-4mic-voicecard"
+
+  # STT optimized for Pi (CPU only)
+  stt:
+    model: "base.en"
+    device: "cpu"
+    compute_type: "int8"  # Optimized for ARM
+    beam_size: 1  # Speed priority
+
+  # LLM optimized for Pi
+  llm:
+    model: "llama3.2:3b"  # Q4_K_M quantization via Ollama
+
+  # TTS settings
+  tts:
+    voice: "en_US-lessac-medium"
+
+  # Testing disabled in production
+  testing:
+    mock_audio_enabled: false
+    benchmark_mode: false
+
+  # Production-specific settings
+  production:
+    auto_restart: true
+    restart_delay_seconds: 10
+    watchdog_enabled: true
+    watchdog_timeout_seconds: 60

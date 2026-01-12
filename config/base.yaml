@@ -1,0 +1,80 @@
+# Ara Voice Assistant - Base Configuration
+# This file contains shared settings for all environments
+# Override in dev.yaml or prod.yaml for environment-specific settings
+
+ara:
+  # Wake word settings
+  wake_word:
+    keyword: "ara"
+    sensitivity: 0.5  # 0.0-1.0, higher = more sensitive
+    model_path: null  # Use default Porcupine model
+
+  # Audio settings
+  audio:
+    input_device: "default"
+    output_device: "default"
+    sample_rate: 16000  # Hz, required by Whisper
+    channels: 1
+    chunk_size: 1024  # frames per buffer
+
+  # Speech-to-Text settings
+  stt:
+    model: "base.en"  # tiny.en, base.en, small.en
+    device: "cpu"  # cpu, cuda, auto
+    compute_type: "int8"  # float16, int8
+    beam_size: 1  # 1 for speed, 5 for accuracy
+    vad_filter: true  # Voice Activity Detection
+
+  # Language Model settings
+  llm:
+    provider: "ollama"  # ollama, claude
+    model: "llama3.2:3b"
+    host: "http://localhost:11434"
+    max_tokens: 150  # Keep responses short for voice
+    temperature: 0.7
+    system_prompt: |
+      You are Ara, a helpful voice assistant. Keep responses brief,
+      conversational, and under 2 sentences. Be natural and friendly.
+      Never use markdown, lists, or formatting—speak naturally.
+      If you don't know something, say so briefly.
+
+  # Text-to-Speech settings
+  tts:
+    voice: "en_US-lessac-medium"
+    speed: 1.0  # 0.5-2.0
+    model_path: null  # Use default Piper path
+
+  # Mode settings
+  mode:
+    default: "offline"  # offline, online_local, online_cloud
+    auto_detect_network: true
+    network_check_interval: 30  # seconds
+
+  # Logging settings
+  logging:
+    level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+    enabled: true
+    format: "jsonl"
+    retention_days: 90
+    log_dir: "~/ara/logs"
+    summary_dir: "~/ara/summaries"
+
+  # Feedback settings
+  feedback:
+    audio_enabled: true
+    sounds:
+      wake_detected: "beep.wav"
+      error: "error.wav"
+      mode_change: "chime.wav"
+      timer_alert: "alarm.wav"
+
+  # Performance settings
+  performance:
+    preload_models: true  # Load models on startup
+    latency_warning_ms: 3000  # Warn if E2E > this
+
+  # Cloud settings (when online)
+  cloud:
+    claude_model: "claude-3-haiku-20240307"
+    search_enabled: true
+    weather_enabled: true

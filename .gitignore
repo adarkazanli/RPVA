@@ -1,0 +1,108 @@
+# Ara Voice Assistant - Git Ignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Models (large files, download separately)
+models/
+*.gguf
+*.bin
+*.onnx
+*.pt
+*.pth
+
+# Logs and data
+logs/
+*.log
+*.jsonl
+summaries/
+
+# Audio files (except test fixtures)
+*.wav
+*.mp3
+*.ogg
+!tests/fixtures/audio/*.wav
+
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+secrets.yaml
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+
+# Jupyter notebooks (if any)
+.ipynb_checkpoints/
+
+# Porcupine access key (if stored locally)
+porcupine_key.txt
+
+# Benchmark results (generated)
+BENCHMARKS.md
+benchmark_results/
