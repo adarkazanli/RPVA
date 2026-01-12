@@ -63,6 +63,9 @@ class MockWakeWordDetector:
             at_chunk: Chunk number (0-based) when detection should occur
             confidence: Confidence level for the detection
         """
+        # Reset chunk count for new detection schedule
+        self._chunk_count = 0
+        self._scheduled_detections.clear()
         self._scheduled_detections[at_chunk] = confidence
 
     @property

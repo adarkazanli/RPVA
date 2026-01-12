@@ -18,6 +18,7 @@ class IntentType(Enum):
     REMINDER_SET = "reminder_set"
     REMINDER_CANCEL = "reminder_cancel"
     REMINDER_QUERY = "reminder_query"
+    HISTORY_QUERY = "history_query"
     SYSTEM_COMMAND = "system_command"
     UNKNOWN = "unknown"
 
@@ -79,6 +80,14 @@ class IntentClassifier:
         r"check\s+(?:my\s+)?reminders?",
     ]
 
+    # History query patterns
+    HISTORY_QUERY_PATTERNS = [
+        r"what\s+did\s+I\s+(?:ask|say)\s+(?:you\s+)?yesterday",
+        r"what\s+(?:were\s+)?(?:my\s+)?(?:last|recent)\s+(?:questions?|queries)",
+        r"(?:show|list)\s+(?:my\s+)?(?:conversation\s+)?history",
+        r"what\s+have\s+I\s+(?:asked|said)\s+(?:recently|today)",
+    ]
+
     # System command patterns
     SYSTEM_PATTERNS = [
         (r"go\s+offline", "offline"),
@@ -105,6 +114,9 @@ class IntentClassifier:
         ]
         self._reminder_query = [
             re.compile(p, re.IGNORECASE) for p in self.REMINDER_QUERY_PATTERNS
+        ]
+        self._history_query = [
+            re.compile(p, re.IGNORECASE) for p in self.HISTORY_QUERY_PATTERNS
         ]
         self._system = [(re.compile(p, re.IGNORECASE), cmd) for p, cmd in self.SYSTEM_PATTERNS]
 
@@ -142,6 +154,10 @@ class IntentClassifier:
         if intent := self._try_reminder_cancel(text):
             return intent
         if intent := self._try_reminder_query(text):
+            return intent
+
+        # History query
+        if intent := self._try_history_query(text):
             return intent
 
         # System commands
@@ -257,6 +273,28 @@ class IntentClassifier:
                     type=IntentType.REMINDER_QUERY,
                     confidence=0.85,
                     entities={},
+                    raw_text=text,
+                )
+        return None
+
+    def _try_history_query(self, text: str) -> Intent | None:
+        """Try to match history query patterns."""
+        for pattern in self._history_query:
+            match = pattern.search(text)
+            if match:
+                entities = {}
+                # Try to detect time reference
+                if "yesterday" in text.lower():
+                    entities["time_ref"] = "yesterday"
+                elif "today" in text.lower():
+                    entities["time_ref"] = "today"
+                elif "recent" in text.lower() or "last" in text.lower():
+                    entities["time_ref"] = "recent"
+
+                return Intent(
+                    type=IntentType.HISTORY_QUERY,
+                    confidence=0.85,
+                    entities=entities,
                     raw_text=text,
                 )
         return None

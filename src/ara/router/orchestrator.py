@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from ..config import AraConfig
     from ..feedback import AudioFeedback
     from ..llm.model import LanguageModel
+    from ..logger.interaction import InteractionLogger
     from ..stt.transcriber import Transcriber
     from ..tts.synthesizer import Synthesizer
     from ..wake_word.detector import WakeWordDetector
@@ -71,6 +72,8 @@ class Orchestrator:
         language_model: "LanguageModel",
         synthesizer: "Synthesizer",
         feedback: "AudioFeedback",
+        interaction_logger: "InteractionLogger | None" = None,
+        device_id: str = "default",
     ) -> None:
         """Initialize orchestrator with components.
 
@@ -82,6 +85,8 @@ class Orchestrator:
             language_model: LLM for response generation
             synthesizer: Text-to-speech
             feedback: Audio feedback sounds
+            interaction_logger: Optional logger for interactions
+            device_id: Device identifier for logging
         """
         self._capture = audio_capture
         self._playback = audio_playback
@@ -90,6 +95,8 @@ class Orchestrator:
         self._llm = language_model
         self._synthesizer = synthesizer
         self._feedback = feedback
+        self._interaction_logger = interaction_logger
+        self._device_id = device_id
 
         self._running = False
         self._thread: threading.Thread | None = None
@@ -234,6 +241,17 @@ class Orchestrator:
                 f"TTS:{latencies['tts_ms']}ms)"
             )
 
+            # Log the interaction
+            if self._interaction_logger:
+                latencies["total"] = total_latency
+                self._interaction_logger.log(
+                    transcript=transcript,
+                    response=response_text,
+                    intent=intent.type.value,
+                    latency_ms=latencies,
+                    entities=intent.entities,
+                )
+
             return InteractionResult(
                 transcript=transcript,
                 response_text=response_text,
@@ -273,6 +291,8 @@ class Orchestrator:
             return self._handle_reminder_cancel()
         elif intent.type == IntentType.REMINDER_QUERY:
             return self._handle_reminder_query()
+        elif intent.type == IntentType.HISTORY_QUERY:
+            return self._handle_history_query(intent)
         else:
             # Default to LLM for general questions
             llm_response = self._llm.generate(intent.raw_text)
@@ -400,6 +420,59 @@ class Orchestrator:
         for reminder in pending[:5]:  # Limit to 5
             formatted = self._reminder_manager.format_reminder(reminder)
             lines.append(f"  {formatted}")
+
+        return " ".join(lines)
+
+    def _handle_history_query(self, intent: Intent) -> str:
+        """Handle history query intent."""
+        if not self._interaction_logger:
+            return "I don't have access to conversation history right now."
+
+        from datetime import date, datetime, timedelta, timezone
+
+        time_ref = intent.entities.get("time_ref", "recent")
+
+        # Determine the date range
+        today = date.today()
+        if time_ref == "yesterday":
+            target_date = today - timedelta(days=1)
+            start = datetime.combine(target_date, datetime.min.time()).replace(
+                tzinfo=timezone.utc
+            )
+            end = datetime.combine(target_date, datetime.max.time()).replace(
+                tzinfo=timezone.utc
+            )
+        elif time_ref == "today":
+            start = datetime.combine(today, datetime.min.time()).replace(
+                tzinfo=timezone.utc
+            )
+            end = datetime.now(timezone.utc)
+        else:
+            # Recent - last 10 interactions
+            interactions = self._interaction_logger.storage.get_recent(limit=10)
+            if not interactions:
+                return "I don't have any recent conversation history."
+
+            lines = ["Here are your recent questions:"]
+            for i, interaction in enumerate(interactions[:5], 1):
+                lines.append(f"  {i}. {interaction.transcript}")
+
+            return " ".join(lines)
+
+        # Query by date range
+        interactions = self._interaction_logger.storage.sqlite.get_by_date_range(
+            start, end
+        )
+
+        if not interactions:
+            if time_ref == "yesterday":
+                return "You didn't ask me anything yesterday."
+            else:
+                return "I don't have any interactions recorded for today."
+
+        lines = [f"Here's what you asked me {time_ref}:"]
+        for i, interaction in enumerate(interactions[:5], 1):
+            lines.append(f"  {i}. {interaction.transcript}")
 
         return " ".join(lines)
 
