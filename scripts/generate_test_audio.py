@@ -181,6 +181,74 @@ def generate_success_sound(duration_ms: int = 200, sample_rate: int = 22050) -> 
     return b"".join(audio_data)
 
 
+def generate_timer_alert(duration_ms: int = 1000, sample_rate: int = 22050) -> bytes:
+    """Generate a timer alert sound (repeating pleasant tone pattern)."""
+    audio_data = []
+
+    # Generate 3 short beeps with pauses
+    beep_duration = 150
+    pause_duration = 100
+    freq = 880  # A5
+
+    for _ in range(3):
+        # Generate beep
+        beep_samples = int(sample_rate * beep_duration / 1000)
+        for i in range(beep_samples):
+            t = i / sample_rate
+
+            envelope = 1.0
+            attack = int(sample_rate * 0.01)
+            release = int(sample_rate * 0.02)
+
+            if i < attack:
+                envelope = i / attack
+            elif i > beep_samples - release:
+                envelope = (beep_samples - i) / release
+
+            sample = int(32767 * 0.5 * envelope * math.sin(2 * math.pi * freq * t))
+            audio_data.append(struct.pack("<h", sample))
+
+        # Generate pause (silence)
+        pause_samples = int(sample_rate * pause_duration / 1000)
+        for _ in range(pause_samples):
+            audio_data.append(struct.pack("<h", 0))
+
+    return b"".join(audio_data)
+
+
+def generate_reminder_alert(duration_ms: int = 800, sample_rate: int = 22050) -> bytes:
+    """Generate a reminder alert sound (melodic chime sequence)."""
+    audio_data = []
+
+    # Generate ascending chime sequence (C5 -> E5 -> G5 -> C6)
+    notes = [523, 659, 784, 1047]  # C5, E5, G5, C6
+    note_duration = 150
+
+    for freq in notes:
+        note_samples = int(sample_rate * note_duration / 1000)
+        for i in range(note_samples):
+            t = i / sample_rate
+
+            # Exponential decay envelope
+            decay_rate = 5.0
+            envelope = math.exp(-decay_rate * t / (note_duration / 1000))
+
+            # Attack
+            attack_samples = int(sample_rate * 0.005)
+            if i < attack_samples:
+                envelope *= i / attack_samples
+
+            sample = int(32767 * 0.4 * envelope * math.sin(2 * math.pi * freq * t))
+            audio_data.append(struct.pack("<h", sample))
+
+        # Short pause between notes
+        pause_samples = int(sample_rate * 30 / 1000)
+        for _ in range(pause_samples):
+            audio_data.append(struct.pack("<h", 0))
+
+    return b"".join(audio_data)
+
+
 def save_wav(audio_data: bytes, path: Path, sample_rate: int = 22050) -> None:
     """Save audio data as WAV file."""
     with wave.open(str(path), "wb") as wf:
@@ -205,6 +273,8 @@ def main() -> None:
         "chime.wav": generate_chime(300, sample_rate),
         "alarm.wav": generate_alarm(500, sample_rate),
         "success.wav": generate_success_sound(200, sample_rate),
+        "timer_alert.wav": generate_timer_alert(1000, sample_rate),
+        "reminder_alert.wav": generate_reminder_alert(800, sample_rate),
     }
 
     for filename, audio_data in sounds.items():

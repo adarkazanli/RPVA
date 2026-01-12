@@ -125,8 +125,8 @@ class SoundFeedback:
             FeedbackType.WAKE_WORD_DETECTED: "beep.wav",
             FeedbackType.ERROR: "error.wav",
             FeedbackType.MODE_CHANGE: "chime.wav",
-            FeedbackType.TIMER_ALERT: "alarm.wav",
-            FeedbackType.REMINDER_ALERT: "alarm.wav",
+            FeedbackType.TIMER_ALERT: "timer_alert.wav",
+            FeedbackType.REMINDER_ALERT: "reminder_alert.wav",
             FeedbackType.SUCCESS: "success.wav",
             FeedbackType.PROCESSING: "beep.wav",
         }
