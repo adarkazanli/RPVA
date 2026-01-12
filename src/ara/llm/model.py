@@ -3,8 +3,9 @@
 Defines the interface for language model inference.
 """
 
+from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Iterator, Protocol
+from typing import Protocol
 
 
 @dataclass

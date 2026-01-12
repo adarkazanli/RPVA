@@ -1,6 +1,5 @@
 """Integration tests for online query flow."""
 
-from unittest.mock import MagicMock, patch
 
 import pytest
 

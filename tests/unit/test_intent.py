@@ -4,8 +4,8 @@ import pytest
 
 from ara.router.intent import (
     Intent,
-    IntentType,
     IntentClassifier,
+    IntentType,
 )
 
 

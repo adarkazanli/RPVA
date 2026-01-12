@@ -1,9 +1,7 @@
 """Unit tests for Timer entity and TimerManager."""
 
-import time
 import uuid
-from datetime import datetime, timedelta
-from unittest import mock
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -24,8 +22,8 @@ class TestTimerEntity:
             id=uuid.uuid4(),
             name="pasta timer",
             duration_seconds=300,
-            started_at=datetime.utcnow(),
-            expires_at=datetime.utcnow() + timedelta(seconds=300),
+            started_at=datetime.now(UTC),
+            expires_at=datetime.now(UTC) + timedelta(seconds=300),
             status=TimerStatus.RUNNING,
             alert_played=False,
             created_by_interaction=uuid.uuid4(),
@@ -41,8 +39,8 @@ class TestTimerEntity:
             id=uuid.uuid4(),
             name=None,
             duration_seconds=60,
-            started_at=datetime.utcnow(),
-            expires_at=datetime.utcnow() + timedelta(seconds=60),
+            started_at=datetime.now(UTC),
+            expires_at=datetime.now(UTC) + timedelta(seconds=60),
             status=TimerStatus.RUNNING,
             alert_played=False,
             created_by_interaction=uuid.uuid4(),
@@ -51,7 +49,7 @@ class TestTimerEntity:
 
     def test_timer_remaining_seconds(self) -> None:
         """Test calculating remaining seconds."""
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         timer = Timer(
             id=uuid.uuid4(),
             name=None,
@@ -67,7 +65,7 @@ class TestTimerEntity:
 
     def test_timer_is_expired(self) -> None:
         """Test checking if timer is expired."""
-        past = datetime.utcnow() - timedelta(seconds=10)
+        past = datetime.now(UTC) - timedelta(seconds=10)
         timer = Timer(
             id=uuid.uuid4(),
             name=None,
@@ -178,7 +176,7 @@ class TestTimerManager:
             interaction_id=uuid.uuid4(),
         )
         # Force expiration time to past
-        timer.expires_at = datetime.utcnow() - timedelta(seconds=1)
+        timer.expires_at = datetime.now(UTC) - timedelta(seconds=1)
 
         expired = manager.check_expired()
         assert len(expired) == 1
@@ -190,7 +188,7 @@ class TestTimerManager:
             duration_seconds=0,
             interaction_id=uuid.uuid4(),
         )
-        timer.expires_at = datetime.utcnow() - timedelta(seconds=1)
+        timer.expires_at = datetime.now(UTC) - timedelta(seconds=1)
 
         manager.check_expired()
         assert timer.status == TimerStatus.COMPLETED

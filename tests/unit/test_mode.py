@@ -3,9 +3,6 @@
 import json
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
-
-import pytest
 
 
 class TestModeManagerPersistence:
@@ -131,7 +128,6 @@ class TestModeManagerStatusInfo:
             ModeManager,
             NetworkMonitor,
             NetworkStatus,
-            OperationMode,
         )
 
         monitor = NetworkMonitor()

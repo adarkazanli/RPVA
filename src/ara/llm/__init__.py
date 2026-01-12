@@ -6,7 +6,7 @@ Provides LLM inference using Ollama or mock implementation.
 from typing import TYPE_CHECKING
 
 from .mock import MockLanguageModel
-from .model import LLMResponse, LanguageModel, StreamToken
+from .model import LanguageModel, LLMResponse, StreamToken
 
 if TYPE_CHECKING:
     from ..config import LLMConfig

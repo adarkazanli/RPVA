@@ -1,8 +1,6 @@
 """Unit tests for web search functionality."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 
 class TestSearchResult:

@@ -1,17 +1,17 @@
 """Unit tests for Interaction and Session entities."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
 from ara.logger.interaction import (
     Interaction,
     InteractionLogger,
+    OperationMode,
     ResponseSource,
     Session,
     SessionState,
-    OperationMode,
 )
 
 
@@ -23,7 +23,7 @@ class TestInteraction:
         interaction = Interaction(
             id=uuid.uuid4(),
             session_id=uuid.uuid4(),
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             device_id="pi4-kitchen",
             wake_word_confidence=0.95,
             audio_duration_ms=2500,
@@ -47,7 +47,7 @@ class TestInteraction:
         interaction = Interaction(
             id=uuid.uuid4(),
             session_id=uuid.uuid4(),
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             device_id="pi4-kitchen",
             wake_word_confidence=0.9,
             audio_duration_ms=1000,
@@ -70,7 +70,7 @@ class TestInteraction:
         interaction = Interaction(
             id=uuid.uuid4(),
             session_id=uuid.uuid4(),
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             device_id="pi4-kitchen",
             wake_word_confidence=0.95,
             audio_duration_ms=3000,
@@ -92,7 +92,7 @@ class TestInteraction:
         """Test converting interaction to dictionary."""
         interaction_id = uuid.uuid4()
         session_id = uuid.uuid4()
-        timestamp = datetime.now(timezone.utc)
+        timestamp = datetime.now(UTC)
 
         interaction = Interaction(
             id=interaction_id,
@@ -176,7 +176,7 @@ class TestSession:
         session = Session(
             id=uuid.uuid4(),
             device_id="pi4-kitchen",
-            started_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC),
             ended_at=None,
             interaction_count=0,
             mode=OperationMode.OFFLINE,
@@ -191,7 +191,7 @@ class TestSession:
         session = Session(
             id=uuid.uuid4(),
             device_id="pi4-kitchen",
-            started_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC),
             ended_at=None,
             interaction_count=5,
             mode=OperationMode.OFFLINE,
@@ -207,7 +207,7 @@ class TestSession:
         session = Session(
             id=uuid.uuid4(),
             device_id="pi4-kitchen",
-            started_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC),
             ended_at=None,
             interaction_count=3,
             mode=OperationMode.OFFLINE,
@@ -299,7 +299,7 @@ class TestInteractionLogger:
             latency_ms={"total": 100},
         )
 
-        today = datetime.now(timezone.utc).date()
+        today = datetime.now(UTC).date()
         interactions = logger.get_by_date(today)
 
         assert len(interactions) >= 1

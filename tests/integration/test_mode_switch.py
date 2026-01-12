@@ -1,8 +1,6 @@
 """Integration tests for mode switching flow (T106)."""
 
-from unittest.mock import MagicMock, patch
 
-import pytest
 
 
 class TestModeSwitchingViaVoice:
@@ -175,10 +173,8 @@ class TestModeWithOrchestratorIntegration:
 
     def test_orchestrator_handles_system_command(self) -> None:
         """Test orchestrator routes system commands correctly."""
-        from ara.feedback import FeedbackType
         from ara.feedback.audio import MockFeedback
         from ara.llm.mock import MockLanguageModel
-        from ara.router.intent import IntentClassifier, IntentType
         from ara.router.mode import ModeManager, NetworkMonitor, OperationMode
         from ara.router.orchestrator import Orchestrator
 

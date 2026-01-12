@@ -1,16 +1,15 @@
 """Unit tests for Reminder entity and ReminderManager."""
 
 import uuid
-from datetime import datetime, timedelta
-from unittest import mock
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
 from ara.commands.reminder import (
+    Recurrence,
     Reminder,
     ReminderManager,
     ReminderStatus,
-    Recurrence,
     parse_reminder_time,
 )
 
@@ -20,7 +19,7 @@ class TestReminderEntity:
 
     def test_create_reminder(self) -> None:
         """Test creating a reminder with all fields."""
-        remind_at = datetime.utcnow() + timedelta(hours=1)
+        remind_at = datetime.now(UTC) + timedelta(hours=1)
         reminder = Reminder(
             id=uuid.uuid4(),
             message="call mom",
@@ -29,7 +28,7 @@ class TestReminderEntity:
             status=ReminderStatus.PENDING,
             triggered_at=None,
             created_by_interaction=uuid.uuid4(),
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(UTC),
         )
         assert reminder.message == "call mom"
         assert reminder.recurrence == Recurrence.NONE
@@ -41,18 +40,18 @@ class TestReminderEntity:
         reminder = Reminder(
             id=uuid.uuid4(),
             message="take medication",
-            remind_at=datetime.utcnow() + timedelta(hours=1),
+            remind_at=datetime.now(UTC) + timedelta(hours=1),
             recurrence=Recurrence.DAILY,
             status=ReminderStatus.PENDING,
             triggered_at=None,
             created_by_interaction=uuid.uuid4(),
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(UTC),
         )
         assert reminder.recurrence == Recurrence.DAILY
 
     def test_reminder_is_due(self) -> None:
         """Test checking if reminder is due."""
-        past = datetime.utcnow() - timedelta(minutes=1)
+        past = datetime.now(UTC) - timedelta(minutes=1)
         reminder = Reminder(
             id=uuid.uuid4(),
             message="test",
@@ -61,13 +60,13 @@ class TestReminderEntity:
             status=ReminderStatus.PENDING,
             triggered_at=None,
             created_by_interaction=uuid.uuid4(),
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(UTC),
         )
         assert reminder.is_due is True
 
     def test_reminder_not_due(self) -> None:
         """Test reminder is not due yet."""
-        future = datetime.utcnow() + timedelta(hours=1)
+        future = datetime.now(UTC) + timedelta(hours=1)
         reminder = Reminder(
             id=uuid.uuid4(),
             message="test",
@@ -76,7 +75,7 @@ class TestReminderEntity:
             status=ReminderStatus.PENDING,
             triggered_at=None,
             created_by_interaction=uuid.uuid4(),
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(UTC),
         )
         assert reminder.is_due is False
 
@@ -113,7 +112,7 @@ class TestReminderManager:
 
     def test_create_reminder(self, manager: ReminderManager) -> None:
         """Test creating a reminder through manager."""
-        remind_at = datetime.utcnow() + timedelta(hours=1)
+        remind_at = datetime.now(UTC) + timedelta(hours=1)
         interaction_id = uuid.uuid4()
         reminder = manager.create(
             message="call mom",
@@ -128,7 +127,7 @@ class TestReminderManager:
         """Test creating a recurring reminder."""
         reminder = manager.create(
             message="take medication",
-            remind_at=datetime.utcnow() + timedelta(hours=1),
+            remind_at=datetime.now(UTC) + timedelta(hours=1),
             interaction_id=uuid.uuid4(),
             recurrence=Recurrence.DAILY,
         )
@@ -138,7 +137,7 @@ class TestReminderManager:
         """Test cancelling a reminder."""
         reminder = manager.create(
             message="test",
-            remind_at=datetime.utcnow() + timedelta(hours=1),
+            remind_at=datetime.now(UTC) + timedelta(hours=1),
             interaction_id=uuid.uuid4(),
         )
         result = manager.cancel(reminder.id)
@@ -154,7 +153,7 @@ class TestReminderManager:
         """Test getting a reminder by ID."""
         reminder = manager.create(
             message="test",
-            remind_at=datetime.utcnow() + timedelta(hours=1),
+            remind_at=datetime.now(UTC) + timedelta(hours=1),
             interaction_id=uuid.uuid4(),
         )
         retrieved = manager.get(reminder.id)
@@ -170,12 +169,12 @@ class TestReminderManager:
         """Test listing pending reminders."""
         r1 = manager.create(
             message="r1",
-            remind_at=datetime.utcnow() + timedelta(hours=1),
+            remind_at=datetime.now(UTC) + timedelta(hours=1),
             interaction_id=uuid.uuid4(),
         )
         r2 = manager.create(
             message="r2",
-            remind_at=datetime.utcnow() + timedelta(hours=2),
+            remind_at=datetime.now(UTC) + timedelta(hours=2),
             interaction_id=uuid.uuid4(),
         )
         manager.cancel(r1.id)
@@ -188,12 +187,12 @@ class TestReminderManager:
         """Test listing all reminders."""
         manager.create(
             message="r1",
-            remind_at=datetime.utcnow() + timedelta(hours=1),
+            remind_at=datetime.now(UTC) + timedelta(hours=1),
             interaction_id=uuid.uuid4(),
         )
         manager.create(
             message="r2",
-            remind_at=datetime.utcnow() + timedelta(hours=2),
+            remind_at=datetime.now(UTC) + timedelta(hours=2),
             interaction_id=uuid.uuid4(),
         )
 
@@ -205,7 +204,7 @@ class TestReminderManager:
         # Create a reminder that is already due
         reminder = manager.create(
             message="test",
-            remind_at=datetime.utcnow() - timedelta(minutes=1),
+            remind_at=datetime.now(UTC) - timedelta(minutes=1),
             interaction_id=uuid.uuid4(),
         )
 
@@ -217,7 +216,7 @@ class TestReminderManager:
         """Test that due reminders are marked as triggered."""
         reminder = manager.create(
             message="test",
-            remind_at=datetime.utcnow() - timedelta(minutes=1),
+            remind_at=datetime.now(UTC) - timedelta(minutes=1),
             interaction_id=uuid.uuid4(),
         )
 
@@ -229,7 +228,7 @@ class TestReminderManager:
         """Test dismissing a triggered reminder."""
         reminder = manager.create(
             message="test",
-            remind_at=datetime.utcnow() - timedelta(minutes=1),
+            remind_at=datetime.now(UTC) - timedelta(minutes=1),
             interaction_id=uuid.uuid4(),
         )
         manager.check_due()
@@ -242,7 +241,7 @@ class TestReminderManager:
         """Test that triggering a recurring reminder creates the next one."""
         reminder = manager.create(
             message="daily task",
-            remind_at=datetime.utcnow() - timedelta(minutes=1),
+            remind_at=datetime.now(UTC) - timedelta(minutes=1),
             interaction_id=uuid.uuid4(),
             recurrence=Recurrence.DAILY,
         )
@@ -257,7 +256,7 @@ class TestReminderManager:
         assert len(pending) == 1
         assert pending[0].message == "daily task"
         # Next reminder should be ~24 hours later
-        assert pending[0].remind_at > datetime.utcnow()
+        assert pending[0].remind_at > datetime.now(UTC)
 
 
 class TestParseReminderTime:
@@ -265,7 +264,7 @@ class TestParseReminderTime:
 
     def test_parse_relative_time(self) -> None:
         """Test parsing relative time expressions."""
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
 
         result = parse_reminder_time("in 1 hour")
         assert result is not None
@@ -276,7 +275,7 @@ class TestParseReminderTime:
 
     def test_parse_relative_minutes(self) -> None:
         """Test parsing relative minutes."""
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
 
         result = parse_reminder_time("in 30 minutes")
         assert result is not None
@@ -299,7 +298,7 @@ class TestParseReminderTime:
 
     def test_parse_tomorrow(self) -> None:
         """Test parsing 'tomorrow' expressions."""
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         result = parse_reminder_time("tomorrow at 9 AM")
         assert result is not None
         assert result.day != now.day or result.month != now.month

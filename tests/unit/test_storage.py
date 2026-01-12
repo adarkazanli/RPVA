@@ -2,8 +2,7 @@
 
 import json
 import uuid
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -30,7 +29,7 @@ class TestSQLiteStorage:
         return Interaction(
             id=uuid.uuid4(),
             session_id=uuid.uuid4(),
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             device_id="test-device",
             wake_word_confidence=0.95,
             audio_duration_ms=2500,
@@ -74,7 +73,7 @@ class TestSQLiteStorage:
         interaction2 = Interaction(
             id=uuid.uuid4(),
             session_id=session_id,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             device_id="test-device",
             wake_word_confidence=0.95,
             audio_duration_ms=2000,
@@ -100,8 +99,8 @@ class TestSQLiteStorage:
         """Test getting interactions by date range."""
         storage.save(sample_interaction)
 
-        start = datetime.now(timezone.utc) - timedelta(hours=1)
-        end = datetime.now(timezone.utc) + timedelta(hours=1)
+        start = datetime.now(UTC) - timedelta(hours=1)
+        end = datetime.now(UTC) + timedelta(hours=1)
 
         results = storage.get_by_date_range(start, end)
         assert len(results) >= 1
@@ -126,7 +125,7 @@ class TestSQLiteStorage:
             interaction = Interaction(
                 id=uuid.uuid4(),
                 session_id=session_id,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 device_id="test-device",
                 wake_word_confidence=0.95,
                 audio_duration_ms=2000,
@@ -152,7 +151,7 @@ class TestSQLiteStorage:
         """Test counting interactions by date."""
         storage.save(sample_interaction)
 
-        today = datetime.now(timezone.utc).date()
+        today = datetime.now(UTC).date()
         count = storage.count_by_date(today)
         assert count >= 1
 
@@ -167,7 +166,7 @@ class TestSQLiteStorage:
             interaction = Interaction(
                 id=uuid.uuid4(),
                 session_id=session_id,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 device_id="test-device",
                 wake_word_confidence=0.95,
                 audio_duration_ms=2000,
@@ -184,7 +183,7 @@ class TestSQLiteStorage:
             )
             storage.save(interaction)
 
-        today = datetime.now(timezone.utc).date()
+        today = datetime.now(UTC).date()
         counts = storage.get_intent_counts(today)
 
         assert counts.get("general_question", 0) >= 3
@@ -200,7 +199,7 @@ class TestSQLiteStorage:
             interaction = Interaction(
                 id=uuid.uuid4(),
                 session_id=session_id,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 device_id="test-device",
                 wake_word_confidence=0.95,
                 audio_duration_ms=2000,
@@ -217,7 +216,7 @@ class TestSQLiteStorage:
             )
             storage.save(interaction)
 
-        today = datetime.now(timezone.utc).date()
+        today = datetime.now(UTC).date()
         avg = storage.get_average_latency(today)
 
         # Average of 1000, 1200, 1400, 1600, 1800 = 1400
@@ -243,7 +242,7 @@ class TestJSONLWriter:
         return Interaction(
             id=uuid.uuid4(),
             session_id=uuid.uuid4(),
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             device_id="test-device",
             wake_word_confidence=0.95,
             audio_duration_ms=2500,
@@ -266,7 +265,7 @@ class TestJSONLWriter:
         writer.write(sample_interaction)
 
         # Check file was created
-        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        today = datetime.now(UTC).strftime("%Y-%m-%d")
         log_file = writer.log_dir / f"{today}.jsonl"
         assert log_file.exists()
 
@@ -279,7 +278,7 @@ class TestJSONLWriter:
         interaction2 = Interaction(
             id=uuid.uuid4(),
             session_id=sample_interaction.session_id,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             device_id="test-device",
             wake_word_confidence=0.95,
             audio_duration_ms=2000,
@@ -297,7 +296,7 @@ class TestJSONLWriter:
         writer.write(interaction2)
 
         # Check both lines exist
-        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        today = datetime.now(UTC).strftime("%Y-%m-%d")
         log_file = writer.log_dir / f"{today}.jsonl"
 
         with open(log_file) as f:
@@ -311,7 +310,7 @@ class TestJSONLWriter:
         """Test reading interactions from JSONL."""
         writer.write(sample_interaction)
 
-        today = datetime.now(timezone.utc).date()
+        today = datetime.now(UTC).date()
         interactions = writer.read(today)
 
         assert len(interactions) == 1
@@ -330,7 +329,7 @@ class TestJSONLWriter:
         """Test that written JSON is valid."""
         writer.write(sample_interaction)
 
-        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        today = datetime.now(UTC).strftime("%Y-%m-%d")
         log_file = writer.log_dir / f"{today}.jsonl"
 
         with open(log_file) as f:
@@ -358,7 +357,7 @@ class TestInteractionStorage:
         return Interaction(
             id=uuid.uuid4(),
             session_id=uuid.uuid4(),
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             device_id="test-device",
             wake_word_confidence=0.95,
             audio_duration_ms=2500,
@@ -385,7 +384,7 @@ class TestInteractionStorage:
         assert retrieved is not None
 
         # Verify in JSONL
-        today = datetime.now(timezone.utc).date()
+        today = datetime.now(UTC).date()
         jsonl_data = storage.jsonl.read(today)
         assert len(jsonl_data) >= 1
 

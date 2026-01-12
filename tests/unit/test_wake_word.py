@@ -1,12 +1,9 @@
 """Unit tests for wake word detection module."""
 
-from unittest import mock
 
-import pytest
 
 from ara.audio import AudioChunk
 from ara.wake_word import WakeWordResult, create_wake_word_detector
-from ara.wake_word.detector import WakeWordDetector
 from ara.wake_word.mock import MockWakeWordDetector
 
 

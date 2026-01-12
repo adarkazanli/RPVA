@@ -8,9 +8,8 @@ import time
 import wave
 from collections.abc import Iterator
 from pathlib import Path
-from typing import BinaryIO
 
-from .capture import AudioCapture, AudioChunk
+from .capture import AudioChunk
 
 
 class MockAudioCapture:
@@ -157,9 +156,11 @@ class MockAudioCapture:
             yield chunk
 
             # If we have a source and it's exhausted, stop
-            if self._audio_source is not None:
-                if self._source_position >= len(self._audio_source):
-                    break
+            if (
+                self._audio_source is not None
+                and self._source_position >= len(self._audio_source)
+            ):
+                break
 
             # Simulate real-time by sleeping
             time.sleep(chunk_duration_sec * 0.9)  # Slightly faster to avoid buffer underrun
@@ -190,6 +191,19 @@ class MockAudioCapture:
         if self._audio_source is None:
             return True  # Infinite silence
         return self._source_position < len(self._audio_source)
+
+    @property
+    def _audio_data(self) -> bytes | None:
+        """Get raw audio data (for testing)."""
+        return self._audio_source
+
+    def load_wav_file(self, path: Path | str) -> None:
+        """Alias for set_audio_file (for compatibility).
+
+        Args:
+            path: Path to WAV file
+        """
+        self.set_audio_file(path)
 
 
 class MockAudioPlayback:
@@ -228,9 +242,9 @@ class MockAudioPlayback:
         """Stop mock playback."""
         self._is_playing = False
 
-    def play_tone(self, frequency: int, duration_ms: int) -> None:
+    def play_tone(self, _frequency: int, duration_ms: int) -> None:
         """Record tone that would be played."""
-        # Generate a simple tone representation
+        # Generate a simple tone representation (frequency ignored in mock)
         num_samples = int(self._sample_rate * duration_ms / 1000)
         # Just store placeholder data indicating a tone was requested
         self._played_audio.append((bytes(num_samples * 2), self._sample_rate))
@@ -252,8 +266,22 @@ class MockAudioPlayback:
         return self._play_count
 
     @property
-    def played_audio(self) -> list[tuple[bytes, int]]:
-        """Get list of (audio, sample_rate) pairs that were played."""
+    def played_audio(self) -> bytes | None:
+        """Get the last played audio bytes (convenience property)."""
+        if not self._played_audio:
+            return None
+        return self._played_audio[-1][0]
+
+    @property
+    def played_sample_rate(self) -> int | None:
+        """Get the sample rate of the last played audio."""
+        if not self._played_audio:
+            return None
+        return self._played_audio[-1][1]
+
+    @property
+    def all_played_audio(self) -> list[tuple[bytes, int]]:
+        """Get list of all (audio, sample_rate) pairs that were played."""
         return self._played_audio.copy()
 
     def clear(self) -> None:

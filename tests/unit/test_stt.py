@@ -1,6 +1,5 @@
 """Unit tests for speech-to-text module."""
 
-import pytest
 
 from ara.stt import TranscriptionResult, create_transcriber
 from ara.stt.mock import MockTranscriber

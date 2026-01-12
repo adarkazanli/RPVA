@@ -4,10 +4,7 @@ Uses Piper for fast, high-quality text-to-speech on CPU.
 """
 
 import logging
-import subprocess
-import tempfile
 import time
-import wave
 from pathlib import Path
 from typing import Any
 

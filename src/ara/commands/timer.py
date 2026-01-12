@@ -5,10 +5,10 @@ Implements countdown timers with alert capabilities.
 
 import re
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from enum import Enum
-from typing import Callable
 from uuid import UUID
 
 
@@ -56,7 +56,7 @@ class Timer:
         if self.status in (TimerStatus.COMPLETED, TimerStatus.CANCELLED):
             return 0
 
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         remaining = (self.expires_at - now).total_seconds()
         return max(0, int(remaining))
 
@@ -65,7 +65,7 @@ class Timer:
         """Check if the timer has expired."""
         if self.status != TimerStatus.RUNNING:
             return False
-        return datetime.utcnow() >= self.expires_at
+        return datetime.now(UTC) >= self.expires_at
 
 
 class TimerManager:
@@ -99,7 +99,7 @@ class TimerManager:
         Returns:
             The created Timer object.
         """
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         timer = Timer(
             id=uuid.uuid4(),
             name=name,
@@ -207,7 +207,7 @@ class TimerManager:
             return False
 
         timer._remaining_when_paused = timer.remaining_seconds
-        timer._paused_at = datetime.utcnow()
+        timer._paused_at = datetime.now(UTC)
         timer.status = TimerStatus.PAUSED
         return True
 
@@ -225,7 +225,7 @@ class TimerManager:
             return False
 
         if timer._remaining_when_paused is not None:
-            timer.expires_at = datetime.utcnow() + timedelta(
+            timer.expires_at = datetime.now(UTC) + timedelta(
                 seconds=timer._remaining_when_paused
             )
 

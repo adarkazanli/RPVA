@@ -6,7 +6,7 @@ Provides speech synthesis using Piper or mock implementation.
 from typing import TYPE_CHECKING
 
 from .mock import MockSynthesizer
-from .synthesizer import Synthesizer, SynthesisResult
+from .synthesizer import SynthesisResult, Synthesizer
 
 if TYPE_CHECKING:
     from ..config import TTSConfig

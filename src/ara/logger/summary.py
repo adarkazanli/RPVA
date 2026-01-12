@@ -5,8 +5,8 @@ Generates aggregated statistics and action items from daily interactions.
 
 import re
 import uuid
-from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
+from dataclasses import dataclass
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -95,8 +95,8 @@ class DailySummary:
             "",
             "## Statistics",
             "",
-            f"| Metric | Value |",
-            f"|--------|-------|",
+            "| Metric | Value |",
+            "|--------|-------|",
             f"| Total Interactions | {self.total_interactions} |",
             f"| Successful | {self.successful_interactions} |",
             f"| Errors | {self.error_count} |",
@@ -214,10 +214,10 @@ class SummaryGenerator:
         """
         # Get interactions for the date
         start = datetime.combine(target_date, datetime.min.time()).replace(
-            tzinfo=timezone.utc
+            tzinfo=UTC
         )
         end = datetime.combine(target_date, datetime.max.time()).replace(
-            tzinfo=timezone.utc
+            tzinfo=UTC
         )
 
         interactions = self._storage.sqlite.get_by_date_range(start, end)
@@ -272,7 +272,7 @@ class SummaryGenerator:
             top_intents=top_intents,
             action_items=action_items,
             notable_interactions=[],
-            generated_at=datetime.now(timezone.utc),
+            generated_at=datetime.now(UTC),
         )
 
     def _calculate_percentile(self, values: list[int], percentile: float) -> int:

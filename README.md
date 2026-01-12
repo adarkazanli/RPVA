@@ -70,11 +70,72 @@ cd RPVA
 RPVA/
 ├── README.md                          # This file
 ├── ara-voice-assistant-pi4-setup.md   # Complete setup guide
+├── src/ara/                           # Main source code
+│   ├── audio/                         # Audio capture/playback
+│   ├── config/                        # Configuration management
+│   ├── llm/                           # Language model interface
+│   ├── router/                        # Pipeline orchestration
+│   ├── stt/                           # Speech-to-text
+│   ├── tts/                           # Text-to-speech
+│   └── wake_word/                     # Wake word detection
+├── tests/                             # Test suite
+│   ├── unit/                          # Unit tests
+│   ├── integration/                   # Integration tests
+│   └── fixtures/                      # Test data
+├── config/                            # Configuration profiles
+│   ├── base.yaml                      # Base configuration
+│   ├── dev.yaml                       # Development settings
+│   └── prod.yaml                      # Production settings
 └── .specify/                          # Project specifications
     ├── memory/
     │   └── constitution.md            # Development principles
     └── templates/                     # Spec templates
 ```
+
+## Cross-Platform Development
+
+Ara supports development and testing on multiple platforms:
+
+| Platform | Development | Production | CI/CD |
+|----------|-------------|------------|-------|
+| macOS (Apple Silicon) | Primary | - | Supported |
+| macOS (Intel) | Supported | - | Supported |
+| Linux (x86_64) | Supported | Supported | Primary |
+| Raspberry Pi 4 | - | Primary | - |
+
+### GPU Acceleration
+
+Ara automatically detects and uses available hardware acceleration:
+
+- **Apple Silicon**: Metal Performance Shaders (MPS)
+- **NVIDIA GPU**: CUDA
+- **CPU**: Fallback for all platforms
+
+### Running Tests
+
+```bash
+# Run all tests
+PYTHONPATH=src pytest tests/ -v
+
+# Run only unit tests
+PYTHONPATH=src pytest tests/unit -v
+
+# Run integration tests (may require mocks)
+PYTHONPATH=src pytest tests/integration -v
+
+# Run with mock audio (for CI/headless environments)
+python -m ara --mock-audio --dry-run --profile dev
+```
+
+### CI/CD Pipeline
+
+The project uses GitHub Actions for continuous integration:
+
+- **Platforms tested**: Ubuntu, macOS
+- **Python versions**: 3.11, 3.12
+- **Checks**: Linting (ruff), type checking (mypy), unit tests, integration tests
+
+All tests run with mock audio components, so no real audio hardware is required.
 
 ## Development Principles
 

@@ -1,7 +1,5 @@
 """Unit tests for audio capture and playback."""
 
-import time
-from pathlib import Path
 from unittest import mock
 
 import pytest
@@ -166,8 +164,11 @@ class TestMockAudioPlayback:
         playback.play(audio_data, 22050)
 
         assert playback.play_count == 1
-        assert len(playback.played_audio) == 1
-        assert playback.played_audio[0] == (audio_data, 22050)
+        assert len(playback.all_played_audio) == 1
+        assert playback.all_played_audio[0] == (audio_data, 22050)
+        # Convenience properties return just the last played audio
+        assert playback.played_audio == audio_data
+        assert playback.played_sample_rate == 22050
 
     def test_play_async(self) -> None:
         """Test async playback."""
@@ -206,7 +207,8 @@ class TestMockAudioPlayback:
         playback.clear()
 
         assert playback.play_count == 0
-        assert len(playback.played_audio) == 0
+        assert len(playback.all_played_audio) == 0
+        assert playback.played_audio is None
 
 
 class TestPlatformDetection:
@@ -219,21 +221,19 @@ class TestPlatformDetection:
 
     def test_detect_linux(self) -> None:
         """Test Linux detection."""
-        with mock.patch("platform.system", return_value="Linux"):
-            with mock.patch(
-                "builtins.open",
-                mock.mock_open(read_data="processor: 0\n"),
-            ):
-                assert detect_audio_platform() == "linux"
+        with mock.patch("platform.system", return_value="Linux"), mock.patch(
+            "builtins.open",
+            mock.mock_open(read_data="processor: 0\n"),
+        ):
+            assert detect_audio_platform() == "linux"
 
     def test_detect_raspberry_pi(self) -> None:
         """Test Raspberry Pi detection."""
-        with mock.patch("platform.system", return_value="Linux"):
-            with mock.patch(
-                "builtins.open",
-                mock.mock_open(read_data="Raspberry Pi 4 Model B\n"),
-            ):
-                assert detect_audio_platform() == "raspberrypi"
+        with mock.patch("platform.system", return_value="Linux"), mock.patch(
+            "builtins.open",
+            mock.mock_open(read_data="Raspberry Pi 4 Model B\n"),
+        ):
+            assert detect_audio_platform() == "raspberrypi"
 
 
 class TestFactoryFunctions:

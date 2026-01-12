@@ -23,8 +23,8 @@ from . import (
     PerformanceConfig,
     ProductionConfig,
     STTConfig,
-    TTSConfig,
     TestingConfig,
+    TTSConfig,
     WakeWordConfig,
 )
 

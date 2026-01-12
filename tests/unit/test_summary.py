@@ -1,7 +1,7 @@
 """Unit tests for daily summary generation."""
 
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime
 
 import pytest
 
@@ -36,7 +36,7 @@ class TestDailySummary:
             ],
             action_items=[],
             notable_interactions=[],
-            generated_at=datetime.now(timezone.utc),
+            generated_at=datetime.now(UTC),
         )
         assert summary.total_interactions == 50
         assert summary.error_count == 2
@@ -57,7 +57,7 @@ class TestDailySummary:
             top_intents=[],
             action_items=[],
             notable_interactions=[],
-            generated_at=datetime.now(timezone.utc),
+            generated_at=datetime.now(UTC),
         )
         assert summary.error_rate == 0.05
 
@@ -77,7 +77,7 @@ class TestDailySummary:
             top_intents=[{"intent": "general_question", "count": 20}],
             action_items=[],
             notable_interactions=[],
-            generated_at=datetime.now(timezone.utc),
+            generated_at=datetime.now(UTC),
         )
 
         data = summary.to_dict()
@@ -106,7 +106,7 @@ class TestDailySummary:
                 ActionItem(text="buy milk", source_transcript="remind me to buy milk"),
             ],
             notable_interactions=[],
-            generated_at=datetime.now(timezone.utc),
+            generated_at=datetime.now(UTC),
         )
 
         md = summary.to_markdown()
@@ -191,7 +191,7 @@ class TestSummaryGenerator:
             interaction = Interaction(
                 id=uuid.uuid4(),
                 session_id=session_id,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 device_id="test-device",
                 wake_word_confidence=0.95,
                 audio_duration_ms=2000,
@@ -278,7 +278,7 @@ def _make_interaction(transcript: str, intent: str) -> Interaction:
     return Interaction(
         id=uuid.uuid4(),
         session_id=uuid.uuid4(),
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
         device_id="test-device",
         wake_word_confidence=0.95,
         audio_duration_ms=2000,

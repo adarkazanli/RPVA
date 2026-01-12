@@ -69,7 +69,6 @@ class TestCloudLanguageModel:
     def test_implements_language_model_protocol(self) -> None:
         """Test CloudLanguageModel implements LanguageModel protocol."""
         from ara.llm.cloud import CloudLanguageModel, CloudLLMConfig
-        from ara.llm.model import LanguageModel
 
         config = CloudLLMConfig(api_key="test-key")
         model = CloudLanguageModel(config=config)

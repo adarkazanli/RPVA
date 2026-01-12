@@ -6,7 +6,6 @@ Target: <4s on Raspberry Pi 4, <1s on laptop.
 
 import pytest
 
-from ara.llm import create_language_model
 from ara.llm.mock import MockLanguageModel
 
 

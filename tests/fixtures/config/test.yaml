@@ -1,0 +1,44 @@
+# Ara Voice Assistant - Test Configuration
+# Minimal settings for CI/CD and automated testing
+# Uses all mock components - no real hardware required
+
+extends: base.yaml
+
+ara:
+  # Minimal logging for test output
+  logging:
+    level: "WARNING"
+
+  # Audio uses mocks
+  audio:
+    input_device: "mock"
+    output_device: "mock"
+
+  # STT mock settings
+  stt:
+    device: "cpu"
+    compute_type: "int8"
+
+  # LLM mock settings
+  llm:
+    provider: "mock"
+    model: "mock"
+
+  # TTS mock settings
+  tts:
+    voice: "mock"
+
+  # Testing enabled with all mocks
+  testing:
+    mock_audio_enabled: true
+    mock_audio_dir: "tests/fixtures/audio"
+    mock_llm_enabled: true
+    mock_stt_enabled: true
+    mock_tts_enabled: true
+    benchmark_mode: false
+
+  # Dev features disabled for tests
+  dev:
+    hot_reload: false
+    profile_latency: false
+    save_debug_audio: false

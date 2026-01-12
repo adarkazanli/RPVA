@@ -6,7 +6,6 @@ Uses Ollama for local LLM inference with models like Llama 3.2.
 import logging
 import time
 from collections.abc import Iterator
-from typing import Any
 
 from .model import LLMResponse, StreamToken
 

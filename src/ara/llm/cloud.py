@@ -6,7 +6,7 @@ Provides cloud-based language model capabilities for complex queries.
 import os
 import re
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from .model import LLMResponse
 

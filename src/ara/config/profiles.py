@@ -27,6 +27,14 @@ class Platform(Enum):
     UNKNOWN = "unknown"
 
 
+class Accelerator(Enum):
+    """Available hardware accelerators for ML inference."""
+
+    METAL = "metal"  # Apple Silicon GPU
+    CUDA = "cuda"  # NVIDIA GPU
+    CPU = "cpu"  # CPU only
+
+
 def detect_platform() -> Platform:
     """Detect the current platform.
 
@@ -48,6 +56,69 @@ def detect_platform() -> Platform:
         return Platform.LINUX
     else:
         return Platform.UNKNOWN
+
+
+def detect_accelerator() -> Accelerator:
+    """Detect available hardware accelerator for ML inference.
+
+    Checks for:
+    1. Apple Metal (macOS with Apple Silicon)
+    2. NVIDIA CUDA
+    3. Falls back to CPU
+
+    Returns:
+        Accelerator enum value
+    """
+    # Check for Apple Metal (macOS)
+    if platform.system() == "Darwin":
+        # Check if running on Apple Silicon
+        try:
+            import subprocess
+
+            result = subprocess.run(
+                ["sysctl", "-n", "machdep.cpu.brand_string"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if "Apple" in result.stdout:
+                return Accelerator.METAL
+        except (subprocess.SubprocessError, FileNotFoundError):
+            pass
+
+        # Check for Metal support via torch (if available)
+        try:
+            import torch
+
+            if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                return Accelerator.METAL
+        except ImportError:
+            pass
+
+    # Check for CUDA
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            return Accelerator.CUDA
+    except ImportError:
+        pass
+
+    # Check for CUDA without torch
+    try:
+        import subprocess
+
+        result = subprocess.run(
+            ["nvidia-smi"],
+            capture_output=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            return Accelerator.CUDA
+    except (subprocess.SubprocessError, FileNotFoundError):
+        pass
+
+    return Accelerator.CPU
 
 
 def detect_profile() -> Profile:
@@ -123,8 +194,10 @@ def is_linux() -> bool:
 
 
 __all__ = [
+    "Accelerator",
     "Platform",
     "Profile",
+    "detect_accelerator",
     "detect_platform",
     "detect_profile",
     "get_profile_path",

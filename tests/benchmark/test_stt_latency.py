@@ -6,7 +6,6 @@ Target: <1.5s on Raspberry Pi 4, <0.5s on laptop.
 
 import pytest
 
-from ara.stt import create_transcriber
 from ara.stt.mock import MockTranscriber
 
 

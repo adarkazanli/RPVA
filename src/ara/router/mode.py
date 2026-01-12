@@ -7,10 +7,9 @@ import json
 import socket
 import threading
 import time
-from dataclasses import dataclass
+from collections.abc import Callable
 from enum import Enum
 from pathlib import Path
-from typing import Callable
 
 
 class NetworkStatus(Enum):
@@ -125,7 +124,6 @@ class NetworkMonitor:
             new_status = self.check_connectivity()
 
             if new_status != self._status:
-                old_status = self._status
                 self._status = new_status
                 self._notify_status_change(new_status)
 

@@ -4,8 +4,8 @@ Defines data structures for logging voice interactions and managing sessions.
 """
 
 import uuid
-from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
+from dataclasses import dataclass
+from datetime import UTC, date, datetime
 from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -149,12 +149,12 @@ class Session:
     def end(self) -> None:
         """End the session."""
         self.state = SessionState.ENDED
-        self.ended_at = datetime.now(timezone.utc)
+        self.ended_at = datetime.now(UTC)
 
     def timeout(self) -> None:
         """Mark session as timed out."""
         self.state = SessionState.TIMEOUT
-        self.ended_at = datetime.now(timezone.utc)
+        self.ended_at = datetime.now(UTC)
 
 
 class InteractionLogger:
@@ -246,7 +246,7 @@ class InteractionLogger:
         interaction = Interaction(
             id=uuid.uuid4(),
             session_id=self._current_session.id,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             device_id=self._device_id,
             wake_word_confidence=wake_word_confidence,
             audio_duration_ms=audio_duration_ms,
@@ -278,7 +278,7 @@ class InteractionLogger:
         self._current_session = Session(
             id=uuid.uuid4(),
             device_id=self._device_id,
-            started_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC),
             ended_at=None,
             interaction_count=0,
             mode=mode,
@@ -317,10 +317,10 @@ class InteractionLogger:
         """
         if self._storage is not None:
             start = datetime.combine(target_date, datetime.min.time()).replace(
-                tzinfo=timezone.utc
+                tzinfo=UTC
             )
             end = datetime.combine(target_date, datetime.max.time()).replace(
-                tzinfo=timezone.utc
+                tzinfo=UTC
             )
             return self._storage.sqlite.get_by_date_range(start, end)
         else:

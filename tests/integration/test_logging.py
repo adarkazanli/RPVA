@@ -1,14 +1,13 @@
 """Integration tests for conversation logging."""
 
-import uuid
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 import pytest
 
 from ara.audio.mock_capture import MockAudioCapture, MockAudioPlayback
 from ara.feedback.audio import MockFeedback
 from ara.llm.mock import MockLanguageModel
-from ara.logger.interaction import InteractionLogger, OperationMode
+from ara.logger.interaction import InteractionLogger
 from ara.logger.storage import InteractionStorage
 from ara.logger.summary import SummaryGenerator
 from ara.router.orchestrator import Orchestrator
@@ -257,8 +256,8 @@ class TestHistoryQuery:
         """Test querying interactions by date."""
         today = date.today()
         interactions = storage_with_history.sqlite.get_by_date_range(
-            datetime.combine(today, datetime.min.time()).replace(tzinfo=timezone.utc),
-            datetime.combine(today, datetime.max.time()).replace(tzinfo=timezone.utc),
+            datetime.combine(today, datetime.min.time()).replace(tzinfo=UTC),
+            datetime.combine(today, datetime.max.time()).replace(tzinfo=UTC),
         )
 
         assert len(interactions) == 5

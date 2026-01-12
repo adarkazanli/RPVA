@@ -5,10 +5,10 @@ Implements scheduled reminders with recurring support.
 
 import re
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from enum import Enum
-from typing import Callable
 from uuid import UUID
 
 
@@ -59,7 +59,7 @@ class Reminder:
         """Check if the reminder is due."""
         if self.status != ReminderStatus.PENDING:
             return False
-        return datetime.utcnow() >= self.remind_at
+        return datetime.now(UTC) >= self.remind_at
 
 
 class ReminderManager:
@@ -95,7 +95,7 @@ class ReminderManager:
         Returns:
             The created Reminder object.
         """
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         reminder = Reminder(
             id=uuid.uuid4(),
             message=message,
@@ -166,7 +166,7 @@ class ReminderManager:
         for reminder in list(self._reminders.values()):
             if reminder.status == ReminderStatus.PENDING and reminder.is_due:
                 reminder.status = ReminderStatus.TRIGGERED
-                reminder.triggered_at = datetime.utcnow()
+                reminder.triggered_at = datetime.now(UTC)
                 triggered.append(reminder)
 
                 if self._on_trigger:
@@ -232,7 +232,7 @@ class ReminderManager:
         time_str = reminder.remind_at.strftime("%I:%M %p")
         date_str = reminder.remind_at.strftime("%B %d")
 
-        if reminder.remind_at.date() == datetime.utcnow().date():
+        if reminder.remind_at.date() == datetime.now(UTC).date():
             return f"Reminder at {time_str}: {reminder.message}"
         else:
             return f"Reminder on {date_str} at {time_str}: {reminder.message}"
@@ -257,7 +257,7 @@ def parse_reminder_time(text: str) -> datetime | None:
         return None
 
     text = text.lower().strip()
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
 
     # Try "in X minutes/hours" pattern
     relative_match = re.search(

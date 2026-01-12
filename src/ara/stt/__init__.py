@@ -6,7 +6,7 @@ Provides transcription using faster-whisper or mock implementation.
 from typing import TYPE_CHECKING
 
 from .mock import MockTranscriber
-from .transcriber import PartialTranscription, TranscriptionResult, Transcriber
+from .transcriber import PartialTranscription, Transcriber, TranscriptionResult
 
 if TYPE_CHECKING:
     from ..config import STTConfig

@@ -15,10 +15,14 @@ import logging
 import signal
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from . import __version__
 from .config.loader import load_config
-from .config.profiles import detect_profile, is_development
+from .config.profiles import detect_profile
+
+if TYPE_CHECKING:
+    from .router.orchestrator import Orchestrator
 
 
 def setup_logging(level: str) -> None:
@@ -74,7 +78,76 @@ Environment:
         help="Load config and exit (for testing)",
     )
 
+    parser.add_argument(
+        "--mock-audio",
+        action="store_true",
+        help="Use mock audio components (for testing without hardware)",
+    )
+
+    parser.add_argument(
+        "--test-utterance",
+        type=Path,
+        metavar="PATH",
+        help="Path to WAV file for single test utterance",
+    )
+
     return parser.parse_args()
+
+
+def handle_test_utterance(
+    orchestrator: "Orchestrator",
+    utterance_path: Path,
+    logger: "logging.Logger",
+) -> int:
+    """Handle single test utterance mode.
+
+    Args:
+        orchestrator: Initialized orchestrator
+        utterance_path: Path to WAV file
+        logger: Logger instance
+
+    Returns:
+        Exit code
+    """
+    if not utterance_path.exists():
+        logger.error(f"Test utterance file not found: {utterance_path}")
+        return 1
+
+    logger.info(f"Processing test utterance: {utterance_path}")
+
+    try:
+        # Load the WAV file into mock capture
+        if hasattr(orchestrator, "_capture") and hasattr(
+            orchestrator._capture, "set_audio_file"
+        ):
+            orchestrator._capture.set_audio_file(utterance_path)
+        else:
+            logger.error("Mock audio capture required for test utterance mode")
+            logger.error("Use --mock-audio flag with --test-utterance")
+            return 1
+
+        # Schedule immediate wake word detection (for mock)
+        if hasattr(orchestrator, "_wake_word") and hasattr(
+            orchestrator._wake_word, "schedule_detection"
+        ):
+            orchestrator._wake_word.schedule_detection(at_chunk=0, confidence=1.0)
+
+        # Process single interaction
+        result = orchestrator.process_single_interaction()
+
+        if result:
+            print(f"\nTranscript: {result.transcript}")
+            print(f"Intent: {result.intent}")
+            print(f"Response: {result.response_text}")
+            print(f"Total latency: {result.total_latency_ms}ms")
+            return 0
+        else:
+            logger.error("No result from interaction")
+            return 1
+
+    except Exception as e:
+        logger.error(f"Test utterance failed: {e}")
+        return 1
 
 
 def main() -> int:
@@ -148,11 +221,15 @@ def main() -> int:
     try:
         from .router.orchestrator import Orchestrator
 
-        # Use mocks if testing config is enabled
-        use_mocks = config.testing.mock_audio_enabled
+        # Use mocks if testing config is enabled or --mock-audio flag is set
+        use_mocks = config.testing.mock_audio_enabled or args.mock_audio
 
         orchestrator = Orchestrator.from_config(config, use_mocks=use_mocks)
         logger.info("Components initialized successfully")
+
+        # Handle single test utterance mode
+        if args.test_utterance:
+            return handle_test_utterance(orchestrator, args.test_utterance, logger)
     except Exception as e:
         logger.error(f"Failed to initialize components: {e}")
         print(f"\nError: Failed to initialize voice assistant: {e}")
@@ -166,7 +243,7 @@ def main() -> int:
     # Setup signal handlers for graceful shutdown
     shutdown_requested = False
 
-    def signal_handler(signum: int, frame: object) -> None:
+    def signal_handler(_signum: int, _frame: object) -> None:
         nonlocal shutdown_requested
         if shutdown_requested:
             logger.warning("Force quit requested")

@@ -1,6 +1,5 @@
 """Unit tests for text-to-speech module."""
 
-import pytest
 
 from ara.tts import SynthesisResult, create_synthesizer
 from ara.tts.mock import MockSynthesizer

@@ -1,15 +1,13 @@
 """Integration tests for timer and reminder flow."""
 
-import time
 import uuid
-from datetime import datetime, timedelta
-from unittest import mock
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
 from ara.audio.mock_capture import MockAudioCapture, MockAudioPlayback
-from ara.commands.timer import Timer, TimerManager, TimerStatus
-from ara.commands.reminder import Reminder, ReminderManager, ReminderStatus
+from ara.commands.reminder import ReminderStatus
+from ara.commands.timer import TimerManager, TimerStatus
 from ara.feedback.audio import MockFeedback
 from ara.llm.mock import MockLanguageModel
 from ara.router.intent import IntentClassifier, IntentType
@@ -125,7 +123,7 @@ class TestTimerIntegration:
             duration_seconds=0,
             interaction_id=uuid.uuid4(),
         )
-        timer.expires_at = datetime.utcnow() - timedelta(seconds=1)
+        timer.expires_at = datetime.now(UTC) - timedelta(seconds=1)
 
         # Check for expired timers
         expired = orchestrator.timer_manager.check_expired()
@@ -189,7 +187,7 @@ class TestReminderIntegration:
         # Create a reminder that is already due
         reminder = orchestrator.reminder_manager.create(
             message="test reminder",
-            remind_at=datetime.utcnow() - timedelta(minutes=1),
+            remind_at=datetime.now(UTC) - timedelta(minutes=1),
             interaction_id=uuid.uuid4(),
         )
 

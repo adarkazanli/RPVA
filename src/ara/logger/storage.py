@@ -5,9 +5,8 @@ Provides SQLite and JSONL storage backends for interaction data.
 
 import json
 import sqlite3
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import Any
 from uuid import UUID
 
 from .interaction import Interaction, OperationMode, ResponseSource
@@ -139,7 +138,7 @@ class SQLiteStorage:
                 json.dumps(interaction.latency_ms),
                 interaction.mode.value,
                 interaction.error,
-                datetime.now(timezone.utc).isoformat(),
+                datetime.now(UTC).isoformat(),
             ),
         )
         self._conn.commit()
@@ -251,10 +250,10 @@ class SQLiteStorage:
             Number of interactions.
         """
         start = datetime.combine(target_date, datetime.min.time()).replace(
-            tzinfo=timezone.utc
+            tzinfo=UTC
         )
         end = datetime.combine(target_date, datetime.max.time()).replace(
-            tzinfo=timezone.utc
+            tzinfo=UTC
         )
 
         cursor = self._conn.execute(
@@ -276,10 +275,10 @@ class SQLiteStorage:
             Dictionary of intent to count.
         """
         start = datetime.combine(target_date, datetime.min.time()).replace(
-            tzinfo=timezone.utc
+            tzinfo=UTC
         )
         end = datetime.combine(target_date, datetime.max.time()).replace(
-            tzinfo=timezone.utc
+            tzinfo=UTC
         )
 
         cursor = self._conn.execute(
@@ -304,10 +303,10 @@ class SQLiteStorage:
             Average latency in ms.
         """
         start = datetime.combine(target_date, datetime.min.time()).replace(
-            tzinfo=timezone.utc
+            tzinfo=UTC
         )
         end = datetime.combine(target_date, datetime.max.time()).replace(
-            tzinfo=timezone.utc
+            tzinfo=UTC
         )
 
         cursor = self._conn.execute(

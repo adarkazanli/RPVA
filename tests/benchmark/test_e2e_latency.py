@@ -87,7 +87,7 @@ class TestE2ELatency:
         assert result.total_latency_ms > 0
 
         # Log breakdown for analysis
-        print(f"\nLatency breakdown:")
+        print("\nLatency breakdown:")
         for stage, latency in result.latency_breakdown.items():
             print(f"  {stage}: {latency}ms")
         print(f"  Total: {result.total_latency_ms}ms")

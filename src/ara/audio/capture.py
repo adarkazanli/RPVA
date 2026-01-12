@@ -4,8 +4,9 @@ Defines the interface for audio input capture that all platform
 implementations must follow.
 """
 
+from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Iterator, Protocol
+from typing import Protocol
 
 
 @dataclass

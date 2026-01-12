@@ -23,7 +23,9 @@ if TYPE_CHECKING:
     from ..wake_word.detector import WakeWordDetector
     from .mode import ModeManager
 
-from ..commands.reminder import ReminderManager, parse_reminder_time, Recurrence
+from datetime import UTC
+
+from ..commands.reminder import ReminderManager, parse_reminder_time
 from ..commands.system import SystemCommandHandler
 from ..commands.timer import TimerManager, parse_duration
 from ..feedback import FeedbackType
@@ -158,7 +160,7 @@ class Orchestrator:
         synthesizer = create_synthesizer(config.tts, use_mock=use_mocks)
 
         if use_mocks:
-            feedback: "AudioFeedback" = MockFeedback()
+            feedback: AudioFeedback = MockFeedback()
         else:
             feedback = SoundFeedback(audio_playback, config.feedback)
 
@@ -458,7 +460,7 @@ class Orchestrator:
         if not self._interaction_logger:
             return "I don't have access to conversation history right now."
 
-        from datetime import date, datetime, timedelta, timezone
+        from datetime import date, datetime, timedelta
 
         time_ref = intent.entities.get("time_ref", "recent")
 
@@ -467,16 +469,16 @@ class Orchestrator:
         if time_ref == "yesterday":
             target_date = today - timedelta(days=1)
             start = datetime.combine(target_date, datetime.min.time()).replace(
-                tzinfo=timezone.utc
+                tzinfo=UTC
             )
             end = datetime.combine(target_date, datetime.max.time()).replace(
-                tzinfo=timezone.utc
+                tzinfo=UTC
             )
         elif time_ref == "today":
             start = datetime.combine(today, datetime.min.time()).replace(
-                tzinfo=timezone.utc
+                tzinfo=UTC
             )
-            end = datetime.now(timezone.utc)
+            end = datetime.now(UTC)
         else:
             # Recent - last 10 interactions
             interactions = self._interaction_logger.storage.get_recent(limit=10)
