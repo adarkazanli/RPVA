@@ -1,0 +1,36 @@
+# Ara Voice Assistant - Development Configuration
+# Settings for laptop development (macOS/Linux)
+# Extends base.yaml
+
+extends: base.yaml
+
+ara:
+  # More verbose logging for development
+  logging:
+    level: "DEBUG"
+
+  # Audio settings for development
+  audio:
+    input_device: "default"
+    output_device: "default"
+
+  # STT with GPU acceleration if available
+  stt:
+    device: "auto"  # Will use Metal on macOS, CUDA on Linux if available
+    compute_type: "float16"  # Better quality for dev
+
+  # LLM with GPU acceleration if available
+  llm:
+    # Ollama will auto-detect GPU
+
+  # Testing settings
+  testing:
+    mock_audio_enabled: true  # Allow file-based audio input
+    mock_audio_dir: "tests/fixtures/audio"
+    benchmark_mode: false
+
+  # Development helpers
+  dev:
+    hot_reload: false
+    profile_latency: true
+    save_debug_audio: false  # Save audio for debugging
