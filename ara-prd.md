@@ -1,6 +1,6 @@
 # Ara Voice Assistant — Product Requirements Document
 
-**Version:** 1.1  
+**Version:** 1.2  
 **Date:** January 12, 2026  
 **Author:** Ammar Darkazanli  
 **Status:** Draft
@@ -1010,12 +1010,410 @@ gantt
 
 ---
 
+## Appendix C: Raspberry Pi Safe Shutdown Procedures
+
+Properly shutting down the Raspberry Pi is critical to prevent SD card corruption, data loss, and file system damage. **Never unplug power without a graceful shutdown.**
+
+### Why Graceful Shutdown Matters
+
+```mermaid
+flowchart LR
+    subgraph Unsafe["❌ Unsafe: Power Pull"]
+        A[Running Pi] -->|"Yank power"| B[SD Card Corruption]
+        B --> C[Lost Logs]
+        B --> D[Broken File System]
+        B --> E[Unbootable System]
+    end
+    
+    subgraph Safe["✅ Safe: Graceful Shutdown"]
+        F[Running Pi] -->|"shutdown command"| G[Flush Buffers]
+        G --> H[Stop Services]
+        H --> I[Unmount Filesystems]
+        I --> J[Power Off Signal]
+        J --> K[Safe to Unplug]
+    end
+```
+
+### Shutdown Methods
+
+#### Method 1: SSH Command (Recommended)
+
+```bash
+# From your laptop, SSH into the Pi and shut down
+ssh pi@ara-kitchen.local "sudo shutdown -h now"
+
+# Or with a delay (gives you time to save work)
+ssh pi@ara-kitchen.local "sudo shutdown -h +1"  # 1 minute delay
+
+# Cancel a pending shutdown
+ssh pi@ara-kitchen.local "sudo shutdown -c"
+```
+
+#### Method 2: Direct Command (On the Pi)
+
+```bash
+# Immediate shutdown
+sudo shutdown -h now
+
+# Shutdown with message
+sudo shutdown -h now "Ara shutting down for maintenance"
+
+# Reboot instead of power off
+sudo reboot
+
+# Alternative commands
+sudo poweroff
+sudo halt
+```
+
+#### Method 3: Systemd Commands
+
+```bash
+# Power off
+sudo systemctl poweroff
+
+# Reboot
+sudo systemctl reboot
+
+# Halt (stops system but may not cut power)
+sudo systemctl halt
+```
+
+#### Method 4: Voice Command (When Ara is Running)
+
+Add this to Ara's command set:
+
+```python
+# In src/commands/system.py
+SHUTDOWN_PHRASES = [
+    "ara shutdown",
+    "ara power off", 
+    "ara go to sleep",
+    "ara turn off"
+]
+
+def handle_shutdown(confirm_phrase: str = None):
+    """Shutdown with voice confirmation for safety."""
+    if confirm_phrase == "yes really":
+        speak("Shutting down in 5 seconds. Goodbye!")
+        time.sleep(5)
+        os.system("sudo shutdown -h now")
+    else:
+        speak("Are you sure? Say 'yes really' to confirm shutdown.")
+```
+
+**Voice interaction:**
+```
+User: "Ara, shutdown"
+Ara: "Are you sure? Say 'yes really' to confirm shutdown."
+User: "Yes really"
+Ara: "Shutting down in 5 seconds. Goodbye!"
+[System powers off]
+```
+
+#### Method 5: Hardware Button (Recommended for Production)
+
+Add a physical shutdown button for cases where SSH isn't available.
+
+**Wiring:**
+
+| Button Pin | Pi GPIO |
+|------------|---------|
+| One leg | GPIO 3 (Pin 5) |
+| Other leg | Ground (Pin 6) |
+
+**Setup script (`/home/pi/ara/scripts/shutdown_button.py`):**
+
+```python
+#!/usr/bin/env python3
+"""
+Physical shutdown button handler.
+Listens on GPIO 3 for button press to trigger safe shutdown.
+GPIO 3 is special - it can also wake the Pi from halt state.
+"""
+
+import RPi.GPIO as GPIO
+import subprocess
+import time
+
+SHUTDOWN_PIN = 3  # GPIO 3 (Pin 5) - also serves as wake pin
+HOLD_TIME = 3     # Seconds to hold for shutdown
+
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(SHUTDOWN_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+
+def shutdown():
+    """Perform graceful shutdown."""
+    print("Shutdown button held - initiating shutdown...")
+    subprocess.call(['sudo', 'shutdown', '-h', 'now'])
+
+def button_callback(channel):
+    """Handle button press with hold detection."""
+    start_time = time.time()
+    
+    # Wait for button release or hold time
+    while GPIO.input(SHUTDOWN_PIN) == GPIO.LOW:
+        if time.time() - start_time >= HOLD_TIME:
+            shutdown()
+            return
+        time.sleep(0.1)
+    
+    # Short press - just log it
+    press_duration = time.time() - start_time
+    print(f"Button pressed for {press_duration:.1f}s (need {HOLD_TIME}s for shutdown)")
+
+# Set up interrupt
+GPIO.add_event_detect(
+    SHUTDOWN_PIN, 
+    GPIO.FALLING, 
+    callback=button_callback, 
+    bouncetime=200
+)
+
+print(f"Shutdown button active on GPIO {SHUTDOWN_PIN}")
+print(f"Hold for {HOLD_TIME} seconds to shutdown")
+
+try:
+    while True:
+        time.sleep(1)
+except KeyboardInterrupt:
+    GPIO.cleanup()
+```
+
+**Enable as systemd service (`/etc/systemd/system/shutdown-button.service`):**
+
+```ini
+[Unit]
+Description=Shutdown Button Handler
+After=multi-user.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /home/pi/ara/scripts/shutdown_button.py
+Restart=always
+User=root
+
+[Install]
+WantedBy=multi-user.target
+```
+
+**Install the service:**
+
+```bash
+sudo cp /home/pi/ara/scripts/shutdown-button.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable shutdown-button.service
+sudo systemctl start shutdown-button.service
+```
+
+#### Method 6: Remote API Endpoint (For Home Automation)
+
+If Ara exposes a local API:
+
+```python
+# In src/api/system.py
+from fastapi import APIRouter, HTTPException
+import subprocess
+
+router = APIRouter()
+
+@router.post("/system/shutdown")
+async def api_shutdown(confirm: bool = False, delay: int = 5):
+    """
+    Shutdown the Pi via API call.
+    Requires confirm=true for safety.
+    """
+    if not confirm:
+        raise HTTPException(
+            status_code=400, 
+            detail="Add ?confirm=true to confirm shutdown"
+        )
+    
+    subprocess.Popen(
+        ['sudo', 'shutdown', '-h', f'+{delay // 60}'],
+        stdout=subprocess.DEVNULL
+    )
+    
+    return {"status": "shutdown scheduled", "delay_seconds": delay}
+
+@router.post("/system/reboot")
+async def api_reboot(confirm: bool = False):
+    """Reboot the Pi via API call."""
+    if not confirm:
+        raise HTTPException(
+            status_code=400,
+            detail="Add ?confirm=true to confirm reboot"
+        )
+    
+    subprocess.Popen(['sudo', 'reboot'])
+    return {"status": "rebooting"}
+```
+
+**Usage:**
+
+```bash
+# From laptop or Home Assistant
+curl -X POST "http://ara-kitchen.local:8000/system/shutdown?confirm=true"
+```
+
+### Shutdown State Flow
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant User
+    participant Ara
+    participant Systemd
+    participant Services
+    participant Filesystem
+    participant Hardware
+
+    User->>Ara: "Ara, shutdown" / Button / SSH
+    Ara->>Ara: Confirm shutdown request
+    Ara->>User: "Shutting down in 5 seconds"
+    Ara->>Systemd: shutdown -h now
+    
+    Systemd->>Services: Send SIGTERM to all services
+    Services->>Services: Ara service stops gracefully
+    Services->>Services: Logger flushes pending writes
+    Services->>Systemd: Services stopped
+    
+    Systemd->>Filesystem: Sync all buffers
+    Filesystem->>Filesystem: Write pending data to SD card
+    Systemd->>Filesystem: Unmount all filesystems
+    Filesystem->>Systemd: Filesystems unmounted
+    
+    Systemd->>Hardware: Send ACPI power off
+    Hardware->>Hardware: Green LED blinks then off
+    
+    Note over Hardware: Safe to unplug power now
+```
+
+### LED Status Indicators
+
+| LED State | Meaning |
+|-----------|---------|
+| Green solid | Running normally |
+| Green blinking | SD card activity |
+| Green off, Red solid | Halted - safe to unplug |
+| No LEDs | Power disconnected |
+
+### Pre-Shutdown Checklist
+
+Before shutting down, Ara should:
+
+```bash
+#!/bin/bash
+# /home/pi/ara/scripts/pre-shutdown.sh
+
+echo "Running pre-shutdown tasks..."
+
+# 1. Flush any pending logs
+cd /home/pi/ara
+python3 -c "from src.logger import flush_all; flush_all()"
+
+# 2. Generate daily summary if not done
+python3 scripts/daily_summary.py --date today
+
+# 3. Sync logs to backup location (if mounted)
+if mountpoint -q /mnt/backup; then
+    rsync -av /home/pi/ara/logs/ /mnt/backup/ara-logs/
+fi
+
+# 4. Announce shutdown
+python3 -c "from src.tts import speak; speak('Shutdown complete. Goodbye.')"
+
+echo "Pre-shutdown tasks complete"
+```
+
+**Hook into shutdown:**
+
+```bash
+# Add to /etc/rc0.d/ (runs at shutdown)
+sudo ln -s /home/pi/ara/scripts/pre-shutdown.sh /etc/rc0.d/K01ara-shutdown
+```
+
+### Emergency Situations
+
+If the Pi is unresponsive and won't accept shutdown commands:
+
+```mermaid
+flowchart TD
+    A[Pi Unresponsive] --> B{Can you SSH in?}
+    
+    B -->|Yes| C[Run: sudo shutdown -h now]
+    B -->|No| D{Is screen attached?}
+    
+    D -->|Yes| E[Ctrl+Alt+Del or<br/>type 'sudo reboot']
+    D -->|No| F{Network accessible?}
+    
+    F -->|Yes| G[Try SSH with timeout:<br/>ssh -o ConnectTimeout=5]
+    F -->|No| H{Physical access?}
+    
+    H -->|Yes| I[Hold shutdown button<br/>3+ seconds]
+    H -->|No| J[Last resort:<br/>Unplug power]
+    
+    I --> K{Button works?}
+    K -->|Yes| L[Wait for LEDs off]
+    K -->|No| J
+    
+    J --> M[⚠️ Risk of SD corruption]
+    M --> N[Run fsck on next boot]
+    
+    C --> O[✅ Safe shutdown]
+    E --> O
+    G --> C
+    L --> O
+```
+
+### Recovering from Unsafe Shutdown
+
+If power was lost unexpectedly:
+
+```bash
+# On next boot, check filesystem
+sudo fsck -y /dev/mmcblk0p2
+
+# Check for corrupted logs
+cd /home/pi/ara/logs
+for f in *.jsonl; do
+    python3 -c "import json; [json.loads(l) for l in open('$f')]" 2>/dev/null || echo "Corrupted: $f"
+done
+
+# Rebuild any corrupted daily summaries
+python3 scripts/daily_summary.py --rebuild --date yesterday
+```
+
+### Quick Reference
+
+| Action | Command |
+|--------|---------|
+| Shutdown now | `sudo shutdown -h now` |
+| Shutdown in 5 min | `sudo shutdown -h +5` |
+| Reboot | `sudo reboot` |
+| Cancel shutdown | `sudo shutdown -c` |
+| Check uptime | `uptime` |
+| Safe to unplug | Green LED off |
+
+### Best Practices
+
+1. **Always use graceful shutdown** — Never pull power while running
+2. **Add a hardware button** — Essential for headless production units
+3. **Enable voice shutdown** — Convenient but require confirmation
+4. **Monitor SD card health** — Use `sudo badblocks -v /dev/mmcblk0` periodically
+5. **Use quality SD cards** — A2-rated, industrial grade if possible
+6. **Consider read-only root** — For maximum corruption protection (advanced)
+7. **Back up regularly** — Clone SD card after major changes
+
+---
+
 ## Revision History
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
 | 1.0 | 2026-01-12 | Ammar Darkazanli | Initial draft |
 | 1.1 | 2026-01-12 | Ammar Darkazanli | Added Mermaid diagrams, laptop dev environment |
+| 1.2 | 2026-01-12 | Ammar Darkazanli | Added Appendix C: Safe shutdown procedures |
 
 ---
 
