@@ -19,6 +19,7 @@ class IntentType(Enum):
     REMINDER_CANCEL = "reminder_cancel"
     REMINDER_QUERY = "reminder_query"
     HISTORY_QUERY = "history_query"
+    WEB_SEARCH = "web_search"
     SYSTEM_COMMAND = "system_command"
     UNKNOWN = "unknown"
 
@@ -88,6 +89,16 @@ class IntentClassifier:
         r"what\s+have\s+I\s+(?:asked|said)\s+(?:recently|today)",
     ]
 
+    # Web search patterns
+    WEB_SEARCH_PATTERNS = [
+        r"search\s+(?:for\s+)?(.+)",
+        r"look\s+up\s+(.+)",
+        r"with\s+internet[,\s]+(.+)",
+        r"using\s+internet[,\s]+(.+)",
+        r"google\s+(.+)",
+        r"find\s+(?:information\s+(?:about|on)\s+)?(.+)",
+    ]
+
     # System command patterns
     SYSTEM_PATTERNS = [
         (r"go\s+offline", "offline"),
@@ -117,6 +128,9 @@ class IntentClassifier:
         ]
         self._history_query = [
             re.compile(p, re.IGNORECASE) for p in self.HISTORY_QUERY_PATTERNS
+        ]
+        self._web_search = [
+            re.compile(p, re.IGNORECASE) for p in self.WEB_SEARCH_PATTERNS
         ]
         self._system = [(re.compile(p, re.IGNORECASE), cmd) for p, cmd in self.SYSTEM_PATTERNS]
 
@@ -158,6 +172,10 @@ class IntentClassifier:
 
         # History query
         if intent := self._try_history_query(text):
+            return intent
+
+        # Web search
+        if intent := self._try_web_search(text):
             return intent
 
         # System commands
@@ -294,6 +312,25 @@ class IntentClassifier:
                 return Intent(
                     type=IntentType.HISTORY_QUERY,
                     confidence=0.85,
+                    entities=entities,
+                    raw_text=text,
+                )
+        return None
+
+    def _try_web_search(self, text: str) -> Intent | None:
+        """Try to match web search patterns."""
+        for pattern in self._web_search:
+            match = pattern.search(text)
+            if match:
+                entities = {}
+                # Extract the search query from the match
+                groups = match.groups()
+                if groups and groups[0]:
+                    entities["query"] = groups[0].strip()
+
+                return Intent(
+                    type=IntentType.WEB_SEARCH,
+                    confidence=0.9,
                     entities=entities,
                     raw_text=text,
                 )

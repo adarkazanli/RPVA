@@ -293,6 +293,8 @@ class Orchestrator:
             return self._handle_reminder_query()
         elif intent.type == IntentType.HISTORY_QUERY:
             return self._handle_history_query(intent)
+        elif intent.type == IntentType.WEB_SEARCH:
+            return self._handle_web_search(intent)
         else:
             # Default to LLM for general questions
             llm_response = self._llm.generate(intent.raw_text)
@@ -475,6 +477,50 @@ class Orchestrator:
             lines.append(f"  {i}. {interaction.transcript}")
 
         return " ".join(lines)
+
+    def _handle_web_search(self, intent: Intent) -> str:
+        """Handle web search intent.
+
+        Performs a web search and summarizes results using the LLM.
+
+        Args:
+            intent: Classified web search intent.
+
+        Returns:
+            Response text with search summary.
+        """
+        try:
+            from ..llm.search import SearchSummarizer, WebSearcher
+
+            query = intent.entities.get("query", intent.raw_text)
+
+            # Try to perform web search
+            searcher = WebSearcher(max_results=5)
+            results = searcher.search(query)
+
+            if not results:
+                # Fall back to local LLM if search fails
+                logger.warning("Web search returned no results, falling back to local LLM")
+                llm_response = self._llm.generate(intent.raw_text)
+                return llm_response.text.strip()
+
+            # Summarize results using LLM
+            summarizer = SearchSummarizer(llm=self._llm)
+            summary = summarizer.summarize(query, results)
+
+            return summary
+
+        except ImportError:
+            # duckduckgo_search not installed
+            logger.warning("Web search not available, falling back to local LLM")
+            llm_response = self._llm.generate(intent.raw_text)
+            return llm_response.text.strip()
+
+        except Exception as e:
+            # Any other error, graceful degradation to local LLM
+            logger.error(f"Web search failed: {e}, falling back to local LLM")
+            llm_response = self._llm.generate(intent.raw_text)
+            return llm_response.text.strip()
 
     def _on_timer_expire(self, timer: "TimerManager") -> None:
         """Callback when a timer expires."""
