@@ -84,12 +84,11 @@ Homepage = "https://github.com/adarkazanli/RPVA"
 Repository = "https://github.com/adarkazanli/RPVA"
 
 [tool.setuptools.packages.find]
-where = ["."]
-include = ["src*"]
+where = ["src"]
+include = ["ara*"]
 
 [tool.setuptools.package-dir]
 "" = "src"
-ara = "src"
 
 # Pytest configuration
 [tool.pytest.ini_options]
