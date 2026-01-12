@@ -67,7 +67,7 @@ class TestMockWakeWordDetector:
         """Test detection when wake word is scheduled."""
         detector = MockWakeWordDetector()
         detector.initialize(keywords=["ara"], sensitivity=0.5)
-        detector.schedule_detection(at_chunk=2, confidence=0.9)
+        detector.schedule_detection(at_chunk=1, confidence=0.9)
 
         chunk = AudioChunk(
             data=bytes(1024),
