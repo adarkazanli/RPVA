@@ -118,6 +118,39 @@ def main() -> int:
         logger.info(f"TTS voice: {config.tts.voice}")
         return 0
 
+    # Print startup banner
+    print("\n" + "=" * 50)
+    print("  Ara Voice Assistant")
+    print("=" * 50)
+    print(f"  Version: {__version__}")
+    print(f"  Profile: {args.profile or detect_profile().value}")
+    print(f"  Wake word: {config.wake_word.keyword}")
+    print(f"  STT: {config.stt.model} ({config.stt.device})")
+    print(f"  LLM: {config.llm.model}")
+    print(f"  TTS: {config.tts.voice}")
+    print("=" * 50 + "\n")
+
+    # Initialize orchestrator
+    logger.info("Initializing voice assistant components...")
+
+    try:
+        from .router.orchestrator import Orchestrator
+
+        # Use mocks if testing config is enabled
+        use_mocks = config.testing.mock_audio_enabled
+
+        orchestrator = Orchestrator.from_config(config, use_mocks=use_mocks)
+        logger.info("Components initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize components: {e}")
+        print(f"\nError: Failed to initialize voice assistant: {e}")
+        print("\nMake sure you have:")
+        print("  1. Run setup: ./scripts/setup.sh")
+        print("  2. Downloaded models: ./scripts/download_models.sh")
+        print("  3. Started Ollama: ollama serve")
+        print("  4. Pulled LLM model: ollama pull llama3.2:3b")
+        return 1
+
     # Setup signal handlers for graceful shutdown
     shutdown_requested = False
 
@@ -128,30 +161,30 @@ def main() -> int:
             sys.exit(1)
         shutdown_requested = True
         logger.info("Shutdown requested, cleaning up...")
+        orchestrator.stop()
 
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
-    # TODO: Initialize components and start voice loop
-    # This will be implemented in Phase 3 (US1)
-    logger.info("Ara is starting up...")
-    logger.warning("Voice loop not yet implemented - see Phase 3 tasks")
+    # Start voice loop
+    logger.info("Starting voice loop - say '%s' to activate", config.wake_word.keyword)
+    print(f"\nListening for wake word '{config.wake_word.keyword}'...")
+    print("Press Ctrl+C to stop.\n")
 
-    # For now, just show config was loaded successfully
-    print("\n" + "=" * 50)
-    print("  Ara Voice Assistant")
-    print("=" * 50)
-    print(f"  Version: {__version__}")
-    print(f"  Profile: {args.profile or detect_profile().value}")
-    print(f"  Wake word: {config.wake_word.keyword}")
-    print(f"  STT: {config.stt.model} ({config.stt.device})")
-    print(f"  LLM: {config.llm.model}")
-    print(f"  TTS: {config.tts.voice}")
-    print("=" * 50)
-    print("\n  Voice loop not yet implemented.")
-    print("  Run setup first: ./scripts/setup.sh")
-    print("  Then download models: ./scripts/download_models.sh")
-    print("=" * 50 + "\n")
+    try:
+        orchestrator.start()
+
+        # Wait for shutdown
+        while not shutdown_requested:
+            import time
+
+            time.sleep(0.1)
+
+    except KeyboardInterrupt:
+        logger.info("Keyboard interrupt received")
+    finally:
+        orchestrator.stop()
+        logger.info("Ara shut down gracefully")
 
     return 0
 
