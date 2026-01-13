@@ -2,6 +2,31 @@
 
 Ultra-low latency, fully offline voice assistant optimized for Raspberry Pi 4.
 
+## Quick Start
+
+```bash
+# 1. Install dependencies and activate virtual environment
+pip install -e ".[dev]"
+source venv/bin/activate
+
+# 2. Start Ollama (in a separate terminal)
+ollama serve
+
+# 3. Download models (Whisper STT + Piper TTS)
+./scripts/download_models.sh
+
+# 4. Set up Picovoice API key (for wake word detection)
+#    Get a free key at https://console.picovoice.ai/
+echo "PICOVOICE_ACCESS_KEY=your_key_here" > .env
+
+# 5. Run Ara
+PYTHONPATH=src python -m ara --profile dev
+```
+
+**Usage:** Say **"porcupine"** (wake word), then ask your question. Ara will transcribe, process, and speak the response.
+
+> **Note:** The default wake word is "porcupine" (a built-in Porcupine keyword). To use a custom wake word like "Ara", train a model at [Picovoice Console](https://console.picovoice.ai/).
+
 ## Features
 
 - **Fully Offline**: Core functionality works without internet
@@ -78,6 +103,21 @@ ollama pull llama3.2:3b
 PYTHONPATH=src python -m ara --dry-run --profile dev
 ```
 
+#### Download Models
+
+```bash
+# Download Whisper (STT) and Piper (TTS) models
+./scripts/download_models.sh
+```
+
+#### Set Up Wake Word Detection
+
+Get a free Picovoice API key at [https://console.picovoice.ai/](https://console.picovoice.ai/) and add it to your environment:
+
+```bash
+echo "PICOVOICE_ACCESS_KEY=your_key_here" > .env
+```
+
 #### Running on macOS
 
 ```bash
@@ -87,6 +127,8 @@ ollama serve
 # Run the voice assistant
 source venv/bin/activate
 PYTHONPATH=src python -m ara --profile dev
+
+# Say "porcupine" then ask a question!
 ```
 
 ---
@@ -301,12 +343,14 @@ python --version
 
 | Command Type | Example |
 |--------------|---------|
-| Wake word | "Ara" |
-| Time | "Ara, what time is it?" |
-| Date | "Ara, what's today's date?" |
-| General question | "Ara, tell me a joke" |
-| Web search | "Ara **with internet**, search for..." |
-| News | "Ara, **check the news** about..." |
+| Wake word | "Porcupine" (default) or custom trained keyword |
+| Time | "[wake word], what time is it?" |
+| Date | "[wake word], what's today's date?" |
+| General question | "[wake word], what is the capital of France?" |
+| Web search | "[wake word] **with internet**, search for..." |
+| News | "[wake word], **check the news** about..." |
+
+> **Tip:** After saying the wake word, wait for a brief moment, then speak your question clearly. Ara will automatically detect when you've finished speaking.
 
 ## Performance Targets
 
