@@ -97,11 +97,11 @@ class PiperSynthesizer:
         try:
             # Synthesize with Piper
             audio_data = b""
-            sample_rate = 22050
+            sample_rate = self._piper.config.sample_rate
 
-            # Piper synthesize returns audio generator
-            for audio_chunk in self._piper.synthesize_stream_raw(text):
-                audio_data += audio_chunk
+            # Piper synthesize yields AudioChunk objects
+            for chunk in self._piper.synthesize(text):
+                audio_data += chunk.audio_int16_bytes
 
             # Apply speed adjustment if needed
             if self._speed != 1.0:
