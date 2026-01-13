@@ -142,12 +142,12 @@ class TestWebSearcher:
         mock_instance = MagicMock()
         mock_instance.text.side_effect = Exception("Network error")
         mock_ddgs.return_value.__enter__ = MagicMock(return_value=mock_instance)
-        mock_ddgs.return_value.__exit__ = MagicMock()
+        mock_ddgs.return_value.__exit__ = MagicMock(return_value=None)  # Don't suppress exception
 
         searcher = WebSearcher()
         results = searcher.search("test query")
 
-        assert len(results) == 0
+        assert results == []
 
     def test_format_results_for_llm(self) -> None:
         """Test formatting search results for LLM context."""
