@@ -16,8 +16,8 @@ ara:
 
   # STT with GPU acceleration if available
   stt:
-    device: "auto"  # Will use Metal on macOS, CUDA on Linux if available
-    compute_type: "float16"  # Better quality for dev
+    device: "cpu"  # Use CPU on Mac (Metal not supported by faster-whisper)
+    compute_type: "int8"  # Compatible with CPU
 
   # LLM with GPU acceleration if available
   llm:
