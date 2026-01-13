@@ -87,7 +87,7 @@ def create_audio_capture(
     plat = detect_audio_platform()
 
     if plat == "macos":
-        from .platform.macos import MacOSAudioCapture
+        from .backends.macos import MacOSAudioCapture
 
         return MacOSAudioCapture(
             device_name=device_name,
@@ -96,7 +96,7 @@ def create_audio_capture(
             chunk_size=chunk_size,
         )
     elif plat in ("linux", "raspberrypi"):
-        from .platform.linux import LinuxAudioCapture
+        from .backends.linux import LinuxAudioCapture
 
         return LinuxAudioCapture(
             device_name=device_name,
@@ -139,14 +139,14 @@ def create_audio_playback(
     plat = detect_audio_platform()
 
     if plat == "macos":
-        from .platform.macos import MacOSAudioPlayback
+        from .backends.macos import MacOSAudioPlayback
 
         return MacOSAudioPlayback(
             device_name=device_name,
             sample_rate=sample_rate,
         )
     elif plat in ("linux", "raspberrypi"):
-        from .platform.linux import LinuxAudioPlayback
+        from .backends.linux import LinuxAudioPlayback
 
         return LinuxAudioPlayback(
             device_name=device_name,

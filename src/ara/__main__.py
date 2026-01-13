@@ -10,6 +10,14 @@ Options:
     --version        Show version
 """
 
+# Load .env file before anything else
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv()
+except ImportError:
+    pass  # python-dotenv not installed, skip
+
 import argparse
 import logging
 import signal

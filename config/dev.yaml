@@ -25,7 +25,7 @@ ara:
 
   # Testing settings
   testing:
-    mock_audio_enabled: true  # Allow file-based audio input
+    mock_audio_enabled: false  # Use real audio hardware
     mock_audio_dir: "tests/fixtures/audio"
     benchmark_mode: false
 

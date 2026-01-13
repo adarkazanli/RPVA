@@ -164,11 +164,23 @@ class Orchestrator:
         else:
             feedback = SoundFeedback(audio_playback, config.feedback)
 
-        # Initialize wake word detector
-        wake_word.initialize(
-            keywords=[config.wake_word.keyword],
-            sensitivity=config.wake_word.sensitivity,
-        )
+        # Initialize wake word detector - fall back to mock if initialization fails
+        try:
+            wake_word.initialize(
+                keywords=[config.wake_word.keyword],
+                sensitivity=config.wake_word.sensitivity,
+            )
+        except RuntimeError as e:
+            # Fall back to mock if Porcupine not configured (e.g., no API key)
+            logger.warning(f"Wake word initialization failed: {e}")
+            logger.warning("Falling back to mock wake word detector")
+            from ..wake_word import MockWakeWordDetector
+
+            wake_word = MockWakeWordDetector()
+            wake_word.initialize(
+                keywords=[config.wake_word.keyword],
+                sensitivity=config.wake_word.sensitivity,
+            )
 
         orch = cls(
             audio_capture=audio_capture,
