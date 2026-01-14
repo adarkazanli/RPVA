@@ -173,7 +173,6 @@ class TestCountdownCancellation:
     def test_countdown_respects_cancellation_flag(self, orchestrator: Orchestrator) -> None:
         """Test that countdown checks cancellation before each number."""
         import threading
-        import time
 
         reminder = orchestrator._reminder_manager.create(
             message="will be cancelled",
@@ -184,15 +183,21 @@ class TestCountdownCancellation:
         # Use slower interval to allow cancellation
         orchestrator._countdown_interval = 0.1
 
-        # Track how many times synthesize was called
+        # Track how many times synthesize was called and signal first call
         call_count = [0]
+        first_call_event = threading.Event()
         original_synthesize = orchestrator._synthesizer.synthesize
 
         def counting_synthesize(*args, **kwargs):
             call_count[0] += 1
+            if call_count[0] == 1:
+                first_call_event.set()  # Signal that first synthesize happened
             return original_synthesize(*args, **kwargs)
 
         orchestrator._synthesizer.synthesize = counting_synthesize
+
+        # Mark reminder as active (normally done by caller with lock)
+        orchestrator._countdown_active[reminder.id] = True
 
         # Start countdown in background thread
         def start_countdown():
@@ -201,13 +206,16 @@ class TestCountdownCancellation:
         thread = threading.Thread(target=start_countdown)
         thread.start()
 
-        # Wait briefly then cancel
-        time.sleep(0.15)  # After intro and maybe one number
+        # Wait for first synthesize call to happen (with timeout)
+        first_call_happened = first_call_event.wait(timeout=2.0)
+        assert first_call_happened, "First synthesize call did not happen within timeout"
+
+        # Now cancel the countdown
         orchestrator._countdown_active[reminder.id] = False
 
         thread.join(timeout=2.0)
 
-        # Should have stopped early (not all 6 calls)
+        # Should have stopped early (not all 6 calls: intro + 4,3,2,1,now)
         assert call_count[0] < 6
 
 
