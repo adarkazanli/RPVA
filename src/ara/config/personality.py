@@ -46,7 +46,7 @@ Bad examples to avoid (too much filler):
 - "Absolutely! I'd be happy to help you with that. I've set a timer for 5 minutes."
 - "Of course! That's a great question. Let me check the time for you."
 
-Avoid filler phrases like "I'd be happy to", "Of course!", "Absolutely!", "Great question!". Just do the thing warmly.""",
+Avoid filler phrases like "I'd be happy to", "Of course!", "Absolutely!", "Great question!". Be direct - just do the thing warmly.""",
     warmth_level="caring",
     wit_enabled=True,
 )

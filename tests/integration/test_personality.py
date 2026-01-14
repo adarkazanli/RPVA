@@ -176,7 +176,7 @@ class TestPersonalityConfigStructure:
         personality = get_default_personality()
 
         assert personality.name == "Purcobine"
-        assert personality.warmth_level == "friendly"
-        # Updated for concise tone (003-timer-countdown): wit_enabled is now False
-        assert personality.wit_enabled is False
+        assert personality.warmth_level == "caring"
+        # Updated for warm/witty tone: wit_enabled is True
+        assert personality.wit_enabled is True
         assert len(personality.system_prompt) > 100  # Should be substantial
