@@ -7,8 +7,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
-from .user_profile import UserProfile, load_user_profile, save_user_profile
-
 
 @dataclass
 class WakeWordConfig:
@@ -182,6 +180,9 @@ class ConfigLoader(Protocol):
         """Get the configuration directory path."""
         ...
 
+
+# Import user profile after class definitions to avoid circular imports
+from .user_profile import UserProfile, load_user_profile, save_user_profile  # noqa: E402
 
 # Public API
 __all__ = [
