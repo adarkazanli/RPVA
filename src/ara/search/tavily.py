@@ -166,9 +166,9 @@ class MockTavilySearch:
     def search(
         self,
         query: str,
-        max_results: int = 5,
-        search_depth: str = "basic",
-        include_answer: bool = True,
+        _max_results: int = 5,
+        _search_depth: str = "basic",
+        _include_answer: bool = True,
     ) -> SearchResult:
         """Return mock search results."""
         return SearchResult(
