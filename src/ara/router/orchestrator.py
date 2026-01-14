@@ -869,10 +869,10 @@ class Orchestrator:
 
     def _on_timer_expire(self, timer: "Timer") -> None:
         """Callback when a timer expires."""
-        # Skip if this timer was already handled by countdown
+        # Skip if this timer is being handled by countdown
+        # Don't delete the entry - let the countdown finish first
         if timer.id in self._countdown_active:
-            logger.debug(f"Timer {timer.id} already handled by countdown")
-            del self._countdown_active[timer.id]
+            logger.debug(f"Timer {timer.id} being handled by countdown, skipping callback")
             return
 
         logger.info(f"Timer expired: {timer.name or 'unnamed'}")
@@ -1171,7 +1171,10 @@ class Orchestrator:
 
         finally:
             self._countdown_in_progress = False
-            # Keep the entries so _on_timer_expire knows they were handled
+            # Clean up tracking entries now that countdown is complete
+            for timer in timers:
+                if timer.id in self._countdown_active:
+                    del self._countdown_active[timer.id]
 
     def _wait_for_wake_word(self) -> bool:
         """Wait for wake word detection.
