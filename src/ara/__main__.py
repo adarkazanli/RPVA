@@ -125,20 +125,18 @@ def handle_test_utterance(
 
     try:
         # Load the WAV file into mock capture
-        if hasattr(orchestrator, "_capture") and hasattr(
-            orchestrator._capture, "set_audio_file"
-        ):
-            orchestrator._capture.set_audio_file(utterance_path)
+        capture = orchestrator._capture
+        if capture is not None and hasattr(capture, "set_audio_file"):
+            capture.set_audio_file(utterance_path)
         else:
             logger.error("Mock audio capture required for test utterance mode")
             logger.error("Use --mock-audio flag with --test-utterance")
             return 1
 
         # Schedule immediate wake word detection (for mock)
-        if hasattr(orchestrator, "_wake_word") and hasattr(
-            orchestrator._wake_word, "schedule_detection"
-        ):
-            orchestrator._wake_word.schedule_detection(at_chunk=0, confidence=1.0)
+        wake_word = orchestrator._wake_word
+        if wake_word is not None and hasattr(wake_word, "schedule_detection"):
+            wake_word.schedule_detection(at_chunk=0, confidence=1.0)
 
         # Process single interaction
         result = orchestrator.process_single_interaction()
@@ -204,9 +202,7 @@ def main() -> int:
 
     network_monitor = NetworkMonitor()
     network_status = network_monitor.check_connectivity()
-    mode_indicator = (
-        "ONLINE" if network_status == NetworkStatus.ONLINE else "OFFLINE"
-    )
+    mode_indicator = "ONLINE" if network_status == NetworkStatus.ONLINE else "OFFLINE"
 
     # Print startup banner
     print("\n" + "=" * 50)

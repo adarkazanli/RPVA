@@ -80,9 +80,7 @@ class TestIntentClassifier:
         assert intent.type == IntentType.TIMER_CANCEL
         assert intent.confidence >= 0.8
 
-    def test_classify_timer_cancel_specific(
-        self, classifier: IntentClassifier
-    ) -> None:
+    def test_classify_timer_cancel_specific(self, classifier: IntentClassifier) -> None:
         """Test classifying specific timer cancellation."""
         intent = classifier.classify("cancel the pasta timer")
         assert intent.type == IntentType.TIMER_CANCEL
@@ -107,9 +105,7 @@ class TestIntentClassifier:
         assert intent.confidence >= 0.8
         assert "message" in intent.entities or "time" in intent.entities
 
-    def test_classify_reminder_set_at_time(
-        self, classifier: IntentClassifier
-    ) -> None:
+    def test_classify_reminder_set_at_time(self, classifier: IntentClassifier) -> None:
         """Test classifying reminder with specific time."""
         intent = classifier.classify("remind me to take medication at 3 PM")
         assert intent.type == IntentType.REMINDER_SET
@@ -132,12 +128,17 @@ class TestIntentClassifier:
         intent = classifier.classify("what is the capital of France")
         assert intent.type == IntentType.GENERAL_QUESTION
 
-    def test_classify_general_question_time(
-        self, classifier: IntentClassifier
-    ) -> None:
-        """Test classifying time question as general."""
+    def test_classify_time_query(self, classifier: IntentClassifier) -> None:
+        """Test classifying time query."""
         intent = classifier.classify("what time is it")
-        assert intent.type == IntentType.GENERAL_QUESTION
+        assert intent.type == IntentType.TIME_QUERY
+        assert intent.confidence == 0.95
+
+    def test_classify_date_query(self, classifier: IntentClassifier) -> None:
+        """Test classifying date query."""
+        intent = classifier.classify("what's the date today")
+        assert intent.type == IntentType.DATE_QUERY
+        assert intent.confidence == 0.95
 
     # System commands
     def test_classify_system_go_offline(self, classifier: IntentClassifier) -> None:

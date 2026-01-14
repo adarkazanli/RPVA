@@ -60,9 +60,7 @@ def create_language_model(
         # Fall back to mock if Ollama not available
         import logging
 
-        logging.getLogger(__name__).warning(
-            "Ollama not available, using mock language model"
-        )
+        logging.getLogger(__name__).warning("Ollama not available, using mock language model")
         return MockLanguageModel()
 
 

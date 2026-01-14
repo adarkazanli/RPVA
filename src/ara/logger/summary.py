@@ -78,8 +78,7 @@ class DailySummary:
             "mode_breakdown": self.mode_breakdown,
             "top_intents": self.top_intents,
             "action_items": [
-                {"text": a.text, "source": a.source_transcript}
-                for a in self.action_items
+                {"text": a.text, "source": a.source_transcript} for a in self.action_items
             ],
             "notable_interactions": self.notable_interactions,
             "generated_at": self.generated_at.isoformat(),
@@ -213,12 +212,8 @@ class SummaryGenerator:
             Generated DailySummary.
         """
         # Get interactions for the date
-        start = datetime.combine(target_date, datetime.min.time()).replace(
-            tzinfo=UTC
-        )
-        end = datetime.combine(target_date, datetime.max.time()).replace(
-            tzinfo=UTC
-        )
+        start = datetime.combine(target_date, datetime.min.time()).replace(tzinfo=UTC)
+        end = datetime.combine(target_date, datetime.max.time()).replace(tzinfo=UTC)
 
         interactions = self._storage.sqlite.get_by_date_range(start, end)
 
@@ -250,9 +245,12 @@ class SummaryGenerator:
         for i in interactions:
             intent_counts[i.intent] = intent_counts.get(i.intent, 0) + 1
 
+        intent_list: list[dict[str, str | int]] = [
+            {"intent": k, "count": v} for k, v in intent_counts.items()
+        ]
         top_intents = sorted(
-            [{"intent": k, "count": v} for k, v in intent_counts.items()],
-            key=lambda x: x["count"],
+            intent_list,
+            key=lambda x: x["count"] if isinstance(x["count"], int) else 0,
             reverse=True,
         )[:10]
 

@@ -192,11 +192,21 @@ def get_reminders_path() -> Path:
     return ensure_ara_dir() / "reminders.json"
 
 
+def get_user_profile_path() -> Path:
+    """Get the path to the user profile file.
+
+    Returns:
+        Path to ~/.ara/user_profile.json
+    """
+    return ensure_ara_dir() / "user_profile.json"
+
+
 __all__ = [
     "YAMLConfigLoader",
     "deep_merge",
     "ensure_ara_dir",
     "get_reminders_path",
+    "get_user_profile_path",
     "load_config",
     "load_yaml_with_inheritance",
 ]

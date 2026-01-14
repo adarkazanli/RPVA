@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from ara.audio.mock_capture import MockAudioCapture, MockAudioPlayback
-from ara.commands.reminder import ReminderStatus
+from ara.commands.reminder import ReminderManager, ReminderStatus
 from ara.commands.timer import TimerManager, TimerStatus
 from ara.feedback.audio import MockFeedback
 from ara.llm.mock import MockLanguageModel
@@ -64,9 +64,7 @@ class TestTimerIntegration:
         active_timers = orchestrator.timer_manager.list_active()
         assert len(active_timers) >= 0  # Timer might be created
 
-    def test_query_timer_via_voice(
-        self, orchestrator_with_timers: Orchestrator
-    ) -> None:
+    def test_query_timer_via_voice(self, orchestrator_with_timers: Orchestrator) -> None:
         """Test querying timer status through voice."""
         orchestrator = orchestrator_with_timers
 
@@ -87,9 +85,7 @@ class TestTimerIntegration:
         assert result is not None
         # Response should mention time remaining or timer info
 
-    def test_cancel_timer_via_voice(
-        self, orchestrator_with_timers: Orchestrator
-    ) -> None:
+    def test_cancel_timer_via_voice(self, orchestrator_with_timers: Orchestrator) -> None:
         """Test cancelling a timer through voice."""
         orchestrator = orchestrator_with_timers
 
@@ -109,12 +105,10 @@ class TestTimerIntegration:
 
         assert result is not None
         # Timer should be cancelled
-        retrieved = orchestrator.timer_manager.get(timer.id)
+        orchestrator.timer_manager.get(timer.id)
         # May or may not be cancelled depending on implementation
 
-    def test_timer_expiration_alert(
-        self, orchestrator_with_timers: Orchestrator
-    ) -> None:
+    def test_timer_expiration_alert(self, orchestrator_with_timers: Orchestrator) -> None:
         """Test that timer expiration triggers alert."""
         orchestrator = orchestrator_with_timers
 
@@ -152,7 +146,7 @@ class TestReminderIntegration:
         llm.set_latency(0)
         synthesizer.set_latency(0)
 
-        return Orchestrator(
+        orch = Orchestrator(
             audio_capture=capture,
             audio_playback=playback,
             wake_word_detector=wake_word,
@@ -161,10 +155,11 @@ class TestReminderIntegration:
             synthesizer=synthesizer,
             feedback=feedback,
         )
+        # Replace with isolated in-memory manager
+        orch._reminder_manager = ReminderManager()
+        return orch
 
-    def test_set_reminder_via_voice(
-        self, orchestrator_with_reminders: Orchestrator
-    ) -> None:
+    def test_set_reminder_via_voice(self, orchestrator_with_reminders: Orchestrator) -> None:
         """Test setting a reminder through voice command."""
         orchestrator = orchestrator_with_reminders
 
@@ -178,9 +173,7 @@ class TestReminderIntegration:
         assert result is not None
         # Check response acknowledges reminder
 
-    def test_reminder_trigger_alert(
-        self, orchestrator_with_reminders: Orchestrator
-    ) -> None:
+    def test_reminder_trigger_alert(self, orchestrator_with_reminders: Orchestrator) -> None:
         """Test that reminder triggers alert when due."""
         orchestrator = orchestrator_with_reminders
 
@@ -242,7 +235,7 @@ class TestIntentClassificationIntegration:
 
         intents = [classifier.classify(text) for text in sequence]
 
-        assert intents[0].type == IntentType.GENERAL_QUESTION
+        assert intents[0].type == IntentType.TIME_QUERY
         assert intents[1].type == IntentType.TIMER_SET
         assert intents[2].type == IntentType.REMINDER_SET
         assert intents[3].type == IntentType.TIMER_QUERY

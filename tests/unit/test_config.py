@@ -194,17 +194,23 @@ class TestProfileDetection:
 
     def test_detect_profile_default_dev(self) -> None:
         """Test default profile is dev on non-Pi systems."""
-        with mock.patch.dict(os.environ, {}, clear=True), mock.patch(
-            "ara.config.profiles.detect_platform",
-            return_value=Platform.MACOS,
+        with (
+            mock.patch.dict(os.environ, {}, clear=True),
+            mock.patch(
+                "ara.config.profiles.detect_platform",
+                return_value=Platform.MACOS,
+            ),
         ):
             assert detect_profile() == Profile.DEV
 
     def test_detect_profile_pi_is_prod(self) -> None:
         """Test Raspberry Pi defaults to prod profile."""
-        with mock.patch.dict(os.environ, {}, clear=True), mock.patch(
-            "ara.config.profiles.detect_platform",
-            return_value=Platform.RASPBERRY_PI,
+        with (
+            mock.patch.dict(os.environ, {}, clear=True),
+            mock.patch(
+                "ara.config.profiles.detect_platform",
+                return_value=Platform.RASPBERRY_PI,
+            ),
         ):
             assert detect_profile() == Profile.PROD
 
@@ -219,9 +225,12 @@ class TestPlatformDetection:
 
     def test_detect_linux(self) -> None:
         """Test Linux detection."""
-        with mock.patch("platform.system", return_value="Linux"), mock.patch(
-            "builtins.open",
-            mock.mock_open(read_data="processor: 0\n"),
+        with (
+            mock.patch("platform.system", return_value="Linux"),
+            mock.patch(
+                "builtins.open",
+                mock.mock_open(read_data="processor: 0\n"),
+            ),
         ):
             assert detect_platform() == Platform.LINUX
 

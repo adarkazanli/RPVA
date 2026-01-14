@@ -23,22 +23,53 @@ if TYPE_CHECKING:
     from ..wake_word.detector import WakeWordDetector
     from .mode import ModeManager
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 from ..commands.reminder import (
+    Reminder,
     ReminderManager,
     ReminderStatus,
     format_time_local,
     parse_reminder_time,
 )
 from ..commands.system import SystemCommandHandler
-from ..commands.timer import TimerManager, parse_duration
+from ..commands.timer import Timer, TimerManager, TimerStatus, parse_duration
 from ..config.loader import get_reminders_path
 from ..config.personality import get_default_personality
+from ..config.user_profile import load_user_profile
 from ..feedback import FeedbackType
 from .intent import Intent, IntentClassifier, IntentType
 
 logger = logging.getLogger(__name__)
+
+# Interaction timing log file
+_INTERACTION_LOG_DIR = Path("logs")
+_INTERACTION_LOG_FILE = _INTERACTION_LOG_DIR / "interactions.txt"
+
+
+def _log_interaction_timing(event: str, transcript: str = "") -> None:
+    """Log interaction timing to text file.
+
+    Args:
+        event: Event type ('captured' or 'responded')
+        transcript: Optional transcript text for context
+    """
+    try:
+        _INTERACTION_LOG_DIR.mkdir(exist_ok=True)
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        if transcript:
+            # Truncate long transcripts
+            short_transcript = transcript[:50] + "..." if len(transcript) > 50 else transcript
+            line = f'{timestamp}: Voice agent {event} -> "{short_transcript}"\n'
+        else:
+            line = f"{timestamp}: Voice agent {event}\n"
+
+        with open(_INTERACTION_LOG_FILE, "a") as f:
+            f.write(line)
+    except Exception as e:
+        logger.debug(f"Failed to write interaction timing log: {e}")
 
 
 def _get_ordinal(n: int) -> str:
@@ -51,8 +82,16 @@ def _get_ordinal(n: int) -> str:
         Ordinal string (first, second, ... tenth, 11th, 12th, etc.)
     """
     ordinals = {
-        1: "first", 2: "second", 3: "third", 4: "fourth", 5: "fifth",
-        6: "sixth", 7: "seventh", 8: "eighth", 9: "ninth", 10: "tenth",
+        1: "first",
+        2: "second",
+        3: "third",
+        4: "fourth",
+        5: "fifth",
+        6: "sixth",
+        7: "seventh",
+        8: "eighth",
+        9: "ninth",
+        10: "tenth",
     }
 
     if n in ordinals:
@@ -156,9 +195,7 @@ class Orchestrator:
         )
 
         # System command handler (if mode manager is provided)
-        self._system_handler = (
-            SystemCommandHandler(mode_manager) if mode_manager else None
-        )
+        self._system_handler = SystemCommandHandler(mode_manager) if mode_manager else None
 
         # Background check thread for timers/reminders
         self._check_thread: threading.Thread | None = None
@@ -176,6 +213,18 @@ class Orchestrator:
         # Track missed reminders to deliver on first interaction
         self._missed_reminders: list = []
         self._check_missed_reminders()
+
+        # Countdown announcement tracking (protected by _countdown_lock)
+        self._countdown_lock = threading.Lock()
+        self._countdown_active: dict[uuid.UUID, bool] = {}
+        self._countdown_in_progress = False
+        self._countdown_interval = 1.0  # 1 second between numbers
+
+        # Load user profile for personalized announcements
+        self._user_profile = load_user_profile()
+        self._user_name = self._user_profile.name
+        if self._user_name:
+            logger.info(f"Loaded user profile: {self._user_name}")
 
     @classmethod
     def from_config(
@@ -255,6 +304,16 @@ class Orchestrator:
         start_time = time.time()
         interaction_id = uuid.uuid4()
 
+        # Ensure required components are available
+        if (
+            not self._feedback
+            or not self._transcriber
+            or not self._synthesizer
+            or not self._playback
+        ):
+            logger.error("Missing required components for interaction")
+            return None
+
         try:
             # Step 1: Wait for wake word
             logger.debug("Listening for wake word...")
@@ -288,6 +347,9 @@ class Orchestrator:
             latencies["stt_ms"] = int((time.time() - stt_start) * 1000)
             logger.info(f"Transcribed: '{transcript}'")
 
+            # Log capture timing
+            _log_interaction_timing("captured", transcript)
+
             # Step 4: Classify intent
             intent = self._intent_classifier.classify(transcript)
             logger.info(f"Intent: {intent.type.value} (confidence: {intent.confidence:.2f})")
@@ -297,6 +359,9 @@ class Orchestrator:
             response_text = self._handle_intent(intent, interaction_id)
             latencies["llm_ms"] = int((time.time() - response_start) * 1000)
             logger.info(f"Response: '{response_text[:50]}...'")
+
+            # Log response timing
+            _log_interaction_timing("responded", response_text)
 
             # Step 6: Synthesize speech
             tts_start = time.time()
@@ -387,8 +452,18 @@ class Orchestrator:
             return self._handle_web_search(intent)
         elif intent.type == IntentType.SYSTEM_COMMAND:
             return self._handle_system_command(intent)
+        elif intent.type == IntentType.USER_NAME_SET:
+            return self._handle_user_name_set(intent)
+        elif intent.type == IntentType.TIME_QUERY:
+            return self._handle_time_query()
+        elif intent.type == IntentType.DATE_QUERY:
+            return self._handle_date_query()
+        elif intent.type == IntentType.FUTURE_TIME_QUERY:
+            return self._handle_future_time_query(intent)
         else:
             # Default to LLM for general questions
+            if self._llm is None:
+                return "I'm not able to process that request right now."
             llm_response = self._llm.generate(intent.raw_text)
             return llm_response.text.strip()
 
@@ -488,17 +563,16 @@ class Orchestrator:
             interaction_id=interaction_id,
         )
 
-        # Format with both current time and target time
-        current_time = format_time_local(now)
+        # Format concise response with target time
         target_time = format_time_local(remind_at)
-        return f"Got it! It's {current_time} now, and I'll remind you at {target_time} to {message}."
+        return f"Got it! Reminder set for {target_time}."
 
     def _handle_reminder_cancel(self, intent: Intent) -> str:
-        """Handle reminder cancel intent with support for cancel by number."""
+        """Handle reminder cancel intent with concise responses."""
         pending = self._reminder_manager.list_pending()
 
         if not pending:
-            return "You don't have any reminders to cancel."
+            return "No reminders to cancel."
 
         # Check if user specified a number
         numbers = self._extract_reminder_numbers(intent.raw_text)
@@ -512,18 +586,19 @@ class Orchestrator:
                 if 1 <= num <= len(pending):
                     reminder = pending[num - 1]
                     self._reminder_manager.cancel(reminder.id)
-                    time_str = format_time_local(reminder.remind_at)
-                    cancelled.append(f"the {_get_ordinal(num)} one ({reminder.message} at {time_str})")
+                    # Signal countdown to stop if running
+                    self._countdown_active[reminder.id] = False
+                    cancelled.append(reminder.message)
                 else:
                     invalid.append(num)
 
             if invalid:
-                return f"Hmm, I only have {len(pending)} reminders right now. Want me to list them so you can pick the right one?"
+                return f"Only have {len(pending)} reminders. Which one?"
 
             if len(cancelled) == 1:
-                return f"Done! I've cancelled {cancelled[0]}."
+                return f"Done! Cancelled: {cancelled[0]}."
             else:
-                return f"Done! I've cancelled {len(cancelled)} reminders: {' and '.join(cancelled)}."
+                return f"Done! Cancelled {len(cancelled)} reminders."
 
         # Check if user specified a description
         description = intent.entities.get("description", "")
@@ -531,17 +606,21 @@ class Orchestrator:
             for reminder in pending:
                 if description.lower() in reminder.message.lower():
                     self._reminder_manager.cancel(reminder.id)
-                    return f"Done! I've cancelled your reminder about {reminder.message}."
-            return "I couldn't find a reminder about that. Want me to list what you have?"
+                    # Signal countdown to stop if running
+                    self._countdown_active[reminder.id] = False
+                    return f"Done! Cancelled: {reminder.message}."
+            return "Couldn't find that reminder. Want me to list them?"
 
         # Ambiguous - multiple reminders exist
         if len(pending) > 1:
-            return "You have a few reminders - which one should I cancel? You can say the reminder number, like 'cancel reminder 2', or describe it."
+            return "Which reminder? Say the number or describe it."
 
         # Single reminder - cancel it
         reminder = pending[0]
         self._reminder_manager.cancel(reminder.id)
-        return f"Done! I've cancelled your reminder to {reminder.message}."
+        # Signal countdown to stop if running
+        self._countdown_active[reminder.id] = False
+        return f"Done! Cancelled: {reminder.message}."
 
     def _extract_reminder_numbers(self, text: str) -> list[int]:
         """Extract reminder numbers from text.
@@ -561,8 +640,16 @@ class Orchestrator:
 
         # Ordinal word to number mapping
         ordinal_words = {
-            "first": 1, "second": 2, "third": 3, "fourth": 4, "fifth": 5,
-            "sixth": 6, "seventh": 7, "eighth": 8, "ninth": 9, "tenth": 10,
+            "first": 1,
+            "second": 2,
+            "third": 3,
+            "fourth": 4,
+            "fifth": 5,
+            "sixth": 6,
+            "seventh": 7,
+            "eighth": 8,
+            "ninth": 9,
+            "tenth": 10,
         }
 
         # Extract ordinal words
@@ -580,35 +667,35 @@ class Orchestrator:
         return sorted(set(numbers))
 
     def _handle_reminder_query(self) -> str:
-        """Handle reminder query intent with numbered format."""
+        """Handle reminder query intent with concise numbered format."""
         pending = self._reminder_manager.list_pending()
 
         if not pending:
-            return "Your schedule is clear - no reminders set right now!"
+            return "No reminders set."
 
         if len(pending) == 1:
             reminder = pending[0]
             time_str = format_time_local(reminder.remind_at)
-            return f"You have one reminder at {time_str} to {reminder.message}."
+            return f"One reminder at {time_str} to {reminder.message}."
 
-        # Multiple reminders - use numbered format
-        parts = [f"You've got {len(pending)} reminders coming up!"]
+        # Multiple reminders - use concise numbered format
+        parts = [f"You have {len(pending)} reminders."]
 
         for i, reminder in enumerate(pending, 1):
             time_str = format_time_local(reminder.remind_at)
             ordinal = _get_ordinal(i)
-            parts.append(f"{ordinal.capitalize()}, you have a reminder at {time_str} to {reminder.message}.")
+            parts.append(f"{ordinal.capitalize()}, at {time_str} to {reminder.message}.")
 
         return " ".join(parts)
 
     def _handle_reminder_clear_all(self) -> str:
-        """Handle clear all reminders intent."""
+        """Handle clear all reminders intent with concise response."""
         count = self._reminder_manager.clear_all()
 
         if count == 0:
-            return "You don't have any reminders to clear - your schedule is already empty!"
+            return "No reminders to clear."
 
-        return f"Done! I've cleared all {count} of your reminders. Fresh start!"
+        return f"Done! Cleared {count} reminders."
 
     def _check_missed_reminders(self) -> None:
         """Check for reminders that were missed during system downtime.
@@ -660,19 +747,15 @@ class Orchestrator:
         today = date.today()
         if time_ref == "yesterday":
             target_date = today - timedelta(days=1)
-            start = datetime.combine(target_date, datetime.min.time()).replace(
-                tzinfo=UTC
-            )
-            end = datetime.combine(target_date, datetime.max.time()).replace(
-                tzinfo=UTC
-            )
+            start = datetime.combine(target_date, datetime.min.time()).replace(tzinfo=UTC)
+            end = datetime.combine(target_date, datetime.max.time()).replace(tzinfo=UTC)
         elif time_ref == "today":
-            start = datetime.combine(today, datetime.min.time()).replace(
-                tzinfo=UTC
-            )
+            start = datetime.combine(today, datetime.min.time()).replace(tzinfo=UTC)
             end = datetime.now(UTC)
         else:
             # Recent - last 10 interactions
+            if not self._interaction_logger or not self._interaction_logger.storage:
+                return "I don't have conversation history available."
             interactions = self._interaction_logger.storage.get_recent(limit=10)
             if not interactions:
                 return "I don't have any recent conversation history."
@@ -684,9 +767,10 @@ class Orchestrator:
             return " ".join(lines)
 
         # Query by date range
-        interactions = self._interaction_logger.storage.sqlite.get_by_date_range(
-            start, end
-        )
+        if not self._interaction_logger or not self._interaction_logger.storage:
+            return "I don't have conversation history available."
+        storage = self._interaction_logger.storage
+        interactions = storage.get_by_date_range(start, end)  # type: ignore[attr-defined]
 
         if not interactions:
             if time_ref == "yesterday":
@@ -723,10 +807,14 @@ class Orchestrator:
             if not results:
                 # Fall back to local LLM if search fails
                 logger.warning("Web search returned no results, falling back to local LLM")
+                if self._llm is None:
+                    return "I couldn't find any results for that search."
                 llm_response = self._llm.generate(intent.raw_text)
                 return llm_response.text.strip()
 
             # Summarize results using LLM
+            if self._llm is None:
+                return "Search results found but unable to summarize."
             summarizer = SearchSummarizer(llm=self._llm)
             summary = summarizer.summarize(query, results)
 
@@ -735,12 +823,16 @@ class Orchestrator:
         except ImportError:
             # duckduckgo_search not installed
             logger.warning("Web search not available, falling back to local LLM")
+            if self._llm is None:
+                return "Web search is not available right now."
             llm_response = self._llm.generate(intent.raw_text)
             return llm_response.text.strip()
 
         except Exception as e:
             # Any other error, graceful degradation to local LLM
             logger.error(f"Web search failed: {e}, falling back to local LLM")
+            if self._llm is None:
+                return "I encountered an error while searching."
             llm_response = self._llm.generate(intent.raw_text)
             return llm_response.text.strip()
 
@@ -764,36 +856,410 @@ class Orchestrator:
 
         return self._system_handler.handle(command)
 
-    def _on_timer_expire(self, timer: "TimerManager") -> None:
-        """Callback when a timer expires."""
-        logger.info(f"Timer expired: {timer.name or 'unnamed'}")
-        self._feedback.play(FeedbackType.TIMER_ALERT)
+    def _handle_user_name_set(self, intent: Intent) -> str:
+        """Handle user name set intent.
 
-        # Optionally announce the timer
+        Args:
+            intent: Classified user name set intent.
+
+        Returns:
+            Response text confirming the name change.
+        """
+        name = intent.entities.get("name", "")
+
+        if not name:
+            return "What should I call you?"
+
+        # Update the profile
+        self._user_profile.name = name
+        self._user_name = name
+
+        # Save to disk
+        from ..config.user_profile import save_user_profile
+
+        save_user_profile(self._user_profile)
+
+        logger.info(f"User name set to: {name}")
+        return f"Got it, {name}! I'll use your name from now on."
+
+    def _handle_time_query(self) -> str:
+        """Handle time query intent by returning the actual system time.
+
+        Returns:
+            Response text with current time.
+        """
+        now = datetime.now()
+        # Format: "It's 3:45 PM"
+        time_str = now.strftime("%-I:%M %p")
+        # Add warmth with user name if available
+        if self._user_name:
+            return f"It's {time_str}, {self._user_name}!"
+        return f"It's {time_str}!"
+
+    def _handle_date_query(self) -> str:
+        """Handle date query intent by returning the actual system date.
+
+        Returns:
+            Response text with current date.
+        """
+        now = datetime.now()
+        # Format: "Today is Tuesday, January 14th, 2025"
+        day_name = now.strftime("%A")
+        month_name = now.strftime("%B")
+        day = now.day
+        year = now.year
+
+        # Add ordinal suffix
+        suffix = "th" if 10 <= day % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(day % 10, "th")
+
+        return f"Today is {day_name}, {month_name} {day}{suffix}, {year}."
+
+    def _handle_future_time_query(self, intent: Intent) -> str:
+        """Handle future time query intent by calculating the time offset.
+
+        Args:
+            intent: Classified intent with amount and unit entities.
+
+        Returns:
+            Response text with calculated future time.
+        """
+        amount_str = intent.entities.get("amount", "1")
+        unit = intent.entities.get("unit", "hour")
+
+        try:
+            amount = int(amount_str)
+        except ValueError:
+            amount = 1
+
+        now = datetime.now()
+
+        # Calculate the future time
+        if unit in ("hour", "hr"):
+            future = now + timedelta(hours=amount)
+        else:  # minute, min
+            future = now + timedelta(minutes=amount)
+
+        # Format the future time
+        time_str = future.strftime("%-I:%M %p")
+
+        # Construct warm response
+        if amount == 1:
+            unit_name = "hour" if unit in ("hour", "hr") else "minute"
+            return f"In {amount} {unit_name}, it'll be {time_str}!"
+        else:
+            unit_name = "hours" if unit in ("hour", "hr") else "minutes"
+            return f"In {amount} {unit_name}, it'll be {time_str}!"
+
+    def _on_timer_expire(self, timer: "Timer") -> None:
+        """Callback when a timer expires."""
+        # Skip if this timer is being handled by countdown
+        # Don't delete the entry - let the countdown finish first
+        if timer.id in self._countdown_active:
+            logger.debug(f"Timer {timer.id} being handled by countdown, skipping callback")
+            return
+
+        logger.info(f"Timer expired: {timer.name or 'unnamed'}")
+        if self._feedback:
+            self._feedback.play(FeedbackType.TIMER_ALERT)
+
+        # Announce the timer
         if timer.name:
             message = f"Your timer '{timer.name}' has finished."
         else:
             message = "Your timer has finished."
 
-        try:
-            synthesis_result = self._synthesizer.synthesize(message)
-            self._playback.play(synthesis_result.audio, synthesis_result.sample_rate)
-        except Exception as e:
-            logger.error(f"Failed to announce timer: {e}")
+        if self._synthesizer and self._playback:
+            try:
+                synthesis_result = self._synthesizer.synthesize(message)
+                self._playback.play(synthesis_result.audio, synthesis_result.sample_rate)
+            except Exception as e:
+                logger.error(f"Failed to announce timer: {e}")
 
-    def _on_reminder_trigger(self, reminder: "ReminderManager") -> None:
+    def _on_reminder_trigger(self, reminder: "Reminder") -> None:
         """Callback when a reminder triggers."""
+        # Skip if this reminder is being handled by countdown
+        # Don't delete the entry - let the countdown finish first
+        if reminder.id in self._countdown_active:
+            logger.debug(f"Reminder {reminder.id} being handled by countdown, skipping callback")
+            return
+
         logger.info(f"Reminder triggered: {reminder.message}")
-        self._feedback.play(FeedbackType.REMINDER_ALERT)
+        if self._feedback:
+            self._feedback.play(FeedbackType.REMINDER_ALERT)
 
         # Announce the reminder
         message = f"Reminder: {reminder.message}"
 
+        if self._synthesizer and self._playback:
+            try:
+                synthesis_result = self._synthesizer.synthesize(message)
+                self._playback.play(synthesis_result.audio, synthesis_result.sample_rate)
+            except Exception as e:
+                logger.error(f"Failed to announce reminder: {e}")
+
+    def _get_countdown_start(self, remaining_seconds: float) -> int:
+        """Get the starting number for countdown based on remaining time.
+
+        Args:
+            remaining_seconds: Seconds until reminder triggers.
+
+        Returns:
+            Starting countdown number (1-5).
+        """
+        if remaining_seconds <= 1:
+            return 1
+        return min(5, int(remaining_seconds))
+
+    def _get_upcoming_reminders(self, seconds: int) -> list[Reminder]:
+        """Find reminders that will trigger within the given time window.
+
+        Args:
+            seconds: Time window in seconds.
+
+        Returns:
+            List of reminders within the window, excluding those already in countdown.
+        """
+        now = datetime.now(UTC)
+        window_end = now + timedelta(seconds=seconds)
+
+        upcoming = []
+        for reminder in self._reminder_manager.list_pending():
+            # Skip if already in countdown
+            if reminder.id in self._countdown_active:
+                continue
+
+            # Check if within window
+            if now <= reminder.remind_at <= window_end:
+                upcoming.append(reminder)
+
+        return sorted(upcoming, key=lambda r: r.remind_at)
+
+    def _get_upcoming_timers(self, seconds: int) -> list[Timer]:
+        """Find timers that will expire within the given time window.
+
+        Args:
+            seconds: Time window in seconds.
+
+        Returns:
+            List of timers within the window, excluding those already in countdown.
+        """
+        now = datetime.now(UTC)
+        window_end = now + timedelta(seconds=seconds)
+
+        upcoming = []
+        for timer in self._timer_manager.list_active():
+            # Skip if already in countdown
+            if timer.id in self._countdown_active:
+                continue
+
+            # Check if within window
+            if now <= timer.expires_at <= window_end:
+                upcoming.append(timer)
+
+        return sorted(upcoming, key=lambda t: t.expires_at)
+
+    def _generate_countdown_phrase(self, reminders: list[Reminder], user_name: str | None) -> str:
+        """Generate the countdown announcement phrase.
+
+        Args:
+            reminders: List of reminders to announce.
+            user_name: User's name or None for generic greeting.
+
+        Returns:
+            Countdown phrase like "Ammar, you should start your call in"
+        """
+        # Use name or fallback to generic greeting
+        greeting = user_name if user_name else "Hey"
+
+        # Combine task descriptions
+        if len(reminders) == 1:
+            tasks = reminders[0].message
+        else:
+            task_list = [r.message for r in reminders]
+            tasks = " and ".join(task_list)
+
+        return f"{greeting}, you should {tasks} in"
+
+    def _start_countdown(self, reminders: list[Reminder]) -> None:
+        """Start the countdown announcement for the given reminders.
+
+        Args:
+            reminders: Reminders to count down for.
+        """
+        if not reminders or not self._synthesizer or not self._playback:
+            return
+
+        # Note: _countdown_in_progress is already set by the caller with the lock
+        # Note: reminders are already marked in _countdown_active by the caller
+        # to prevent race conditions with check_due()
+
         try:
-            synthesis_result = self._synthesizer.synthesize(message)
-            self._playback.play(synthesis_result.audio, synthesis_result.sample_rate)
-        except Exception as e:
-            logger.error(f"Failed to announce reminder: {e}")
+            # Calculate starting number based on first reminder
+            now = datetime.now(UTC)
+            first_reminder = reminders[0]
+            remaining = (first_reminder.remind_at - now).total_seconds()
+            start_number = self._get_countdown_start(remaining)
+
+            # Generate and speak the intro phrase
+            intro = self._generate_countdown_phrase(reminders, self._user_name)
+            logger.info(f"Starting countdown: {intro} {start_number}...")
+
+            # Speak intro with first number
+            try:
+                intro_text = f"{intro} {start_number}"
+                synthesis_result = self._synthesizer.synthesize(intro_text)
+                self._playback.play(synthesis_result.audio, synthesis_result.sample_rate)
+            except Exception as e:
+                logger.error(f"Failed to synthesize countdown intro: {e}")
+                return
+
+            # Count down from start_number-1 to 1
+            for num in range(start_number - 1, 0, -1):
+                # Check if any reminder was cancelled
+                if not any(self._countdown_active.get(r.id, False) for r in reminders):
+                    logger.info("Countdown cancelled")
+                    return
+
+                # Wait for the interval
+                time.sleep(self._countdown_interval)
+
+                # Speak the number
+                try:
+                    synthesis_result = self._synthesizer.synthesize(str(num))
+                    self._playback.play(synthesis_result.audio, synthesis_result.sample_rate)
+                except Exception as e:
+                    logger.error(f"Failed to synthesize countdown number {num}: {e}")
+
+            # Final wait and "now"
+            if any(self._countdown_active.get(r.id, False) for r in reminders):
+                time.sleep(self._countdown_interval)
+                try:
+                    synthesis_result = self._synthesizer.synthesize("now")
+                    self._playback.play(synthesis_result.audio, synthesis_result.sample_rate)
+                except Exception as e:
+                    logger.error(f"Failed to synthesize 'now': {e}")
+
+                # Play the reminder alert
+                if self._feedback:
+                    self._feedback.play(FeedbackType.REMINDER_ALERT)
+
+                # Mark reminders as triggered so check_due doesn't announce again
+                for reminder in reminders:
+                    reminder.status = ReminderStatus.TRIGGERED
+                    reminder.triggered_at = datetime.now(UTC)
+                self._reminder_manager._save()
+
+        finally:
+            # Use lock when resetting state
+            with self._countdown_lock:
+                self._countdown_in_progress = False
+                # Clean up tracking entries now that countdown is complete
+                for reminder in reminders:
+                    if reminder.id in self._countdown_active:
+                        del self._countdown_active[reminder.id]
+
+    def _generate_timer_countdown_phrase(self, timers: list[Timer], user_name: str | None) -> str:
+        """Generate the countdown announcement phrase for timers.
+
+        Args:
+            timers: List of timers to announce.
+            user_name: User's name or None for generic greeting.
+
+        Returns:
+            Countdown phrase like "Ammar, your timer ends in"
+        """
+        # Use name or fallback to generic greeting
+        greeting = user_name if user_name else "Hey"
+
+        if len(timers) == 1:
+            timer = timers[0]
+            if timer.name:
+                return f"{greeting}, your {timer.name} timer ends in"
+            return f"{greeting}, your timer ends in"
+        else:
+            return f"{greeting}, your timers end in"
+
+    def _start_timer_countdown(self, timers: list[Timer]) -> None:
+        """Start the countdown announcement for the given timers.
+
+        Args:
+            timers: Timers to count down for.
+        """
+        if not timers or not self._synthesizer or not self._playback:
+            return
+
+        # Note: _countdown_in_progress is already set by the caller with the lock
+        # Note: timers are already marked in _countdown_active by the caller
+        # to prevent race conditions with check_expired()
+
+        try:
+            # Calculate starting number based on first timer
+            now = datetime.now(UTC)
+            first_timer = timers[0]
+            remaining = (first_timer.expires_at - now).total_seconds()
+            start_number = self._get_countdown_start(remaining)
+
+            # Generate and speak the intro phrase
+            intro = self._generate_timer_countdown_phrase(timers, self._user_name)
+            logger.info(f"Starting timer countdown: {intro} {start_number}...")
+
+            # Speak intro with first number
+            try:
+                intro_text = f"{intro} {start_number}"
+                synthesis_result = self._synthesizer.synthesize(intro_text)
+                self._playback.play(synthesis_result.audio, synthesis_result.sample_rate)
+            except Exception as e:
+                logger.error(f"Failed to synthesize timer countdown intro: {e}")
+                return
+
+            # Count down from start_number-1 to 1
+            for num in range(start_number - 1, 0, -1):
+                # Check if any timer was cancelled
+                if not any(self._countdown_active.get(t.id, False) for t in timers):
+                    logger.info("Timer countdown cancelled")
+                    return
+
+                # Wait for the interval
+                time.sleep(self._countdown_interval)
+
+                # Speak the number
+                try:
+                    synthesis_result = self._synthesizer.synthesize(str(num))
+                    self._playback.play(synthesis_result.audio, synthesis_result.sample_rate)
+                except Exception as e:
+                    logger.error(f"Failed to synthesize countdown number {num}: {e}")
+
+            # Final wait and announcement
+            if any(self._countdown_active.get(t.id, False) for t in timers):
+                time.sleep(self._countdown_interval)
+                try:
+                    # Announce timer completion
+                    if len(timers) == 1 and timers[0].name:
+                        message = f"Your {timers[0].name} timer is done!"
+                    else:
+                        message = "Your timer is done!"
+                    synthesis_result = self._synthesizer.synthesize(message)
+                    self._playback.play(synthesis_result.audio, synthesis_result.sample_rate)
+                except Exception as e:
+                    logger.error(f"Failed to synthesize timer completion: {e}")
+
+                # Play the timer alert
+                if self._feedback:
+                    self._feedback.play(FeedbackType.TIMER_ALERT)
+
+                # Mark timers as completed so check_expired doesn't announce again
+                for timer in timers:
+                    timer.status = TimerStatus.COMPLETED
+                    timer.alert_played = True
+
+        finally:
+            # Use lock when resetting state
+            with self._countdown_lock:
+                self._countdown_in_progress = False
+                # Clean up tracking entries now that countdown is complete
+                for timer in timers:
+                    if timer.id in self._countdown_active:
+                        del self._countdown_active[timer.id]
 
     def _wait_for_wake_word(self) -> bool:
         """Wait for wake word detection.
@@ -801,6 +1267,9 @@ class Orchestrator:
         Returns:
             True if wake word detected
         """
+        if not self._capture or not self._wake_word:
+            return False
+
         self._capture.start()
 
         try:
@@ -824,6 +1293,9 @@ class Orchestrator:
         Returns:
             Recorded audio bytes
         """
+        if not self._capture:
+            return b""
+
         audio_buffer = b""
         silence_start: float | None = None
         recording_start = time.time()
@@ -875,7 +1347,7 @@ class Orchestrator:
         sum_squares = sum(s * s for s in samples)
         rms = (sum_squares / num_samples) ** 0.5
 
-        return rms
+        return float(rms)
 
     def start(self) -> None:
         """Start the voice loop in a background thread."""
@@ -887,9 +1359,7 @@ class Orchestrator:
         self._thread.start()
 
         # Start timer/reminder check thread
-        self._check_thread = threading.Thread(
-            target=self._check_timers_and_reminders, daemon=True
-        )
+        self._check_thread = threading.Thread(target=self._check_timers_and_reminders, daemon=True)
         self._check_thread.start()
 
         logger.info("Voice loop started")
@@ -940,8 +1410,46 @@ class Orchestrator:
         """Background thread to check for expired timers and due reminders."""
         while self._running:
             try:
-                # Check for expired timers
+                # Check for upcoming timers that need countdown (5-second window)
+                # Use lock to make check-and-set atomic
+                with self._countdown_lock:
+                    if not self._countdown_in_progress:
+                        upcoming_timers = self._get_upcoming_timers(5)
+                        if upcoming_timers:
+                            # Mark as being counted down BEFORE starting thread
+                            # to prevent race condition with check_expired()
+                            for timer in upcoming_timers:
+                                self._countdown_active[timer.id] = True
+                            self._countdown_in_progress = True
+                            # Start countdown in a separate thread to not block
+                            countdown_thread = threading.Thread(
+                                target=self._start_timer_countdown,
+                                args=(upcoming_timers,),
+                                daemon=True,
+                            )
+                            countdown_thread.start()
+
+                # Check for expired timers (for any not handled by countdown)
                 self._timer_manager.check_expired()
+
+                # Check for upcoming reminders that need countdown (5-second window)
+                # Use lock to make check-and-set atomic
+                with self._countdown_lock:
+                    if not self._countdown_in_progress:
+                        upcoming_reminders = self._get_upcoming_reminders(5)
+                        if upcoming_reminders:
+                            # Mark as being counted down BEFORE starting thread
+                            # to prevent race condition with check_due()
+                            for reminder in upcoming_reminders:
+                                self._countdown_active[reminder.id] = True
+                            self._countdown_in_progress = True
+                            # Start countdown in a separate thread to not block
+                            countdown_thread = threading.Thread(
+                                target=self._start_countdown,
+                                args=(upcoming_reminders,),
+                                daemon=True,
+                            )
+                            countdown_thread.start()
 
                 # Check for due reminders
                 self._reminder_manager.check_due()

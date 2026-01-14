@@ -176,9 +176,7 @@ class SQLiteStorage:
         )
         return [self._row_to_interaction(row) for row in cursor.fetchall()]
 
-    def get_by_date_range(
-        self, start: datetime, end: datetime
-    ) -> list[Interaction]:
+    def get_by_date_range(self, start: datetime, end: datetime) -> list[Interaction]:
         """Get interactions within a date range.
 
         Args:
@@ -198,9 +196,7 @@ class SQLiteStorage:
         )
         return [self._row_to_interaction(row) for row in cursor.fetchall()]
 
-    def get_by_device(
-        self, device_id: str, limit: int = 100
-    ) -> list[Interaction]:
+    def get_by_device(self, device_id: str, limit: int = 100) -> list[Interaction]:
         """Get interactions by device.
 
         Args:
@@ -249,12 +245,8 @@ class SQLiteStorage:
         Returns:
             Number of interactions.
         """
-        start = datetime.combine(target_date, datetime.min.time()).replace(
-            tzinfo=UTC
-        )
-        end = datetime.combine(target_date, datetime.max.time()).replace(
-            tzinfo=UTC
-        )
+        start = datetime.combine(target_date, datetime.min.time()).replace(tzinfo=UTC)
+        end = datetime.combine(target_date, datetime.max.time()).replace(tzinfo=UTC)
 
         cursor = self._conn.execute(
             """
@@ -263,7 +255,7 @@ class SQLiteStorage:
             """,
             (start.isoformat(), end.isoformat()),
         )
-        return cursor.fetchone()[0]
+        return int(cursor.fetchone()[0])
 
     def get_intent_counts(self, target_date: date) -> dict[str, int]:
         """Get intent counts for a specific date.
@@ -274,12 +266,8 @@ class SQLiteStorage:
         Returns:
             Dictionary of intent to count.
         """
-        start = datetime.combine(target_date, datetime.min.time()).replace(
-            tzinfo=UTC
-        )
-        end = datetime.combine(target_date, datetime.max.time()).replace(
-            tzinfo=UTC
-        )
+        start = datetime.combine(target_date, datetime.min.time()).replace(tzinfo=UTC)
+        end = datetime.combine(target_date, datetime.max.time()).replace(tzinfo=UTC)
 
         cursor = self._conn.execute(
             """
@@ -302,12 +290,8 @@ class SQLiteStorage:
         Returns:
             Average latency in ms.
         """
-        start = datetime.combine(target_date, datetime.min.time()).replace(
-            tzinfo=UTC
-        )
-        end = datetime.combine(target_date, datetime.max.time()).replace(
-            tzinfo=UTC
-        )
+        start = datetime.combine(target_date, datetime.min.time()).replace(tzinfo=UTC)
+        end = datetime.combine(target_date, datetime.max.time()).replace(tzinfo=UTC)
 
         cursor = self._conn.execute(
             """
@@ -326,12 +310,12 @@ class SQLiteStorage:
         if not latencies:
             return 0.0
 
-        return sum(latencies) / len(latencies)
+        return float(sum(latencies)) / len(latencies)
 
     def is_wal_mode_enabled(self) -> bool:
         """Check if WAL mode is enabled."""
         cursor = self._conn.execute("PRAGMA journal_mode")
-        return cursor.fetchone()[0].lower() == "wal"
+        return str(cursor.fetchone()[0]).lower() == "wal"
 
     def _row_to_interaction(self, row: sqlite3.Row) -> Interaction:
         """Convert a database row to an Interaction."""

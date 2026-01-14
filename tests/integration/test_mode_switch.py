@@ -1,8 +1,6 @@
 """Integration tests for mode switching flow (T106)."""
 
 
-
-
 class TestModeSwitchingViaVoice:
     """Tests for voice-triggered mode switching."""
 

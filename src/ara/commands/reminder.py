@@ -88,9 +88,7 @@ class ReminderManager:
         """
         self._reminders: dict[UUID, Reminder] = {}
         self._on_trigger = on_trigger
-        self._persistence_path: Path | None = (
-            Path(persistence_path) if persistence_path else None
-        )
+        self._persistence_path: Path | None = Path(persistence_path) if persistence_path else None
 
         # Load existing reminders from persistence
         if self._persistence_path:
@@ -163,10 +161,7 @@ class ReminderManager:
         Returns:
             List of pending reminders, sorted by remind_at.
         """
-        pending = [
-            r for r in self._reminders.values()
-            if r.status == ReminderStatus.PENDING
-        ]
+        pending = [r for r in self._reminders.values() if r.status == ReminderStatus.PENDING]
         return sorted(pending, key=lambda r: r.remind_at)
 
     def list_all(self) -> list[Reminder]:
@@ -409,9 +404,9 @@ def parse_reminder_time(text: str) -> datetime | None:
     text = text.lower().strip()
     now = datetime.now(UTC)
 
-    # Try "in X minutes/hours" pattern
+    # Try "in X seconds/minutes/hours" pattern
     relative_match = re.search(
-        r"in\s+(\d+)\s*(minute|min|hour|hr)s?",
+        r"in\s+(\d+)\s*(second|sec|minute|min|hour|hr)s?",
         text,
         re.IGNORECASE,
     )
@@ -421,8 +416,34 @@ def parse_reminder_time(text: str) -> datetime | None:
 
         if unit in ("hour", "hr"):
             return now + timedelta(hours=amount)
+        elif unit in ("second", "sec"):
+            return now + timedelta(seconds=amount)
         else:
             return now + timedelta(minutes=amount)
+
+    # Try "at H.MM am/pm" pattern (decimal notation like "8.20am")
+    decimal_time_match = re.search(
+        r"(?:at\s+)?(\d{1,2})\.(\d{1,2})\s*(am|pm)",
+        text,
+        re.IGNORECASE,
+    )
+    if decimal_time_match:
+        hour = int(decimal_time_match.group(1))
+        minute = int(decimal_time_match.group(2))
+        period = decimal_time_match.group(3).lower()
+
+        if period == "pm" and hour != 12:
+            hour += 12
+        elif period == "am" and hour == 12:
+            hour = 0
+
+        result = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+
+        # If the time has passed today, schedule for tomorrow
+        if result <= now:
+            result += timedelta(days=1)
+
+        return result
 
     # Try "at HH:MM AM/PM" pattern
     time_match = re.search(
@@ -448,9 +469,8 @@ def parse_reminder_time(text: str) -> datetime | None:
             result += timedelta(days=1)
 
         # Check for "tomorrow" in the text
-        if "tomorrow" in text:
-            if result.date() == now.date():
-                result += timedelta(days=1)
+        if "tomorrow" in text and result.date() == now.date():
+            result += timedelta(days=1)
 
         return result
 

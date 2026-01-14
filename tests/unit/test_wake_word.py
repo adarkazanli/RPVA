@@ -1,7 +1,5 @@
 """Unit tests for wake word detection module."""
 
-
-
 from ara.audio import AudioChunk
 from ara.wake_word import WakeWordResult, create_wake_word_detector
 from ara.wake_word.mock import MockWakeWordDetector

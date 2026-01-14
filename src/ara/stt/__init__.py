@@ -51,9 +51,7 @@ def create_transcriber(
         # Fall back to mock if faster-whisper not available
         import logging
 
-        logging.getLogger(__name__).warning(
-            "faster-whisper not available, using mock transcriber"
-        )
+        logging.getLogger(__name__).warning("faster-whisper not available, using mock transcriber")
         return MockTranscriber()
 
 

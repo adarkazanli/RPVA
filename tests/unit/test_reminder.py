@@ -239,7 +239,7 @@ class TestReminderManager:
 
     def test_recurring_reminder_creates_next(self, manager: ReminderManager) -> None:
         """Test that triggering a recurring reminder creates the next one."""
-        reminder = manager.create(
+        manager.create(
             message="daily task",
             remind_at=datetime.now(UTC) - timedelta(minutes=1),
             interaction_id=uuid.uuid4(),

@@ -187,7 +187,7 @@ class TestModeManagerCallbacks:
 
         callback_count = [0]
 
-        def on_mode_change(old_mode: OperationMode, new_mode: OperationMode) -> None:
+        def on_mode_change(_old_mode: OperationMode, _new_mode: OperationMode) -> None:
             callback_count[0] += 1
 
         monitor = NetworkMonitor()

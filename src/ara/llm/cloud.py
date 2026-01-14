@@ -86,9 +86,7 @@ class CloudLanguageModel:
             Exception: If API call fails.
         """
         if self._client is None:
-            raise RuntimeError(
-                "Anthropic SDK not installed. Run: pip install anthropic"
-            )
+            raise RuntimeError("Anthropic SDK not installed. Run: pip install anthropic")
 
         kwargs = {
             "model": self._config.model,
@@ -258,10 +256,7 @@ def should_use_cloud_fallback(error: Exception) -> bool:
     if "context" in error_msg and ("overflow" in error_msg or "length" in error_msg):
         return True
 
-    if "exceeded" in error_msg:
-        return True
-
-    return False
+    return "exceeded" in error_msg
 
 
 def should_use_cloud_fallback_for_complexity(complexity_score: float) -> bool:

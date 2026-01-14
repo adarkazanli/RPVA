@@ -5,7 +5,9 @@ This module provides configuration loading and profile management.
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Protocol
+
+from .user_profile import UserProfile, load_user_profile, save_user_profile
 
 
 @dataclass
@@ -197,5 +199,8 @@ __all__ = [
     "STTConfig",
     "TTSConfig",
     "TestingConfig",
+    "UserProfile",
     "WakeWordConfig",
+    "load_user_profile",
+    "save_user_profile",
 ]

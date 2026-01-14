@@ -18,7 +18,7 @@ try:
     FASTER_WHISPER_AVAILABLE = True
 except ImportError:
     FASTER_WHISPER_AVAILABLE = False
-    WhisperModel = None  # type: ignore
+    WhisperModel = None
 
 logger = logging.getLogger(__name__)
 
@@ -143,9 +143,7 @@ class WhisperTranscriber:
         duration_ms = int(len(audio) / (sample_rate * 2) * 1000)
         latency_ms = int((time.time() - start_time) * 1000)
 
-        logger.debug(
-            f"Transcribed {duration_ms}ms audio in {latency_ms}ms: '{text[:50]}...'"
-        )
+        logger.debug(f"Transcribed {duration_ms}ms audio in {latency_ms}ms: '{text[:50]}...'")
 
         return TranscriptionResult(
             text=text,
@@ -155,9 +153,7 @@ class WhisperTranscriber:
             segments=word_segments,
         )
 
-    def transcribe_stream(
-        self, audio_stream: Iterator[bytes]
-    ) -> Iterator[PartialTranscription]:
+    def transcribe_stream(self, audio_stream: Iterator[bytes]) -> Iterator[PartialTranscription]:
         """Stream transcription (collects audio then transcribes).
 
         Note: faster-whisper doesn't support true streaming, so we

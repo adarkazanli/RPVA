@@ -3,8 +3,13 @@
 Provides a controllable mock implementation for unit and integration testing.
 """
 
+from typing import TYPE_CHECKING
+
 from ..audio.capture import AudioChunk
 from .detector import WakeWordResult
+
+if TYPE_CHECKING:
+    from ..config import WakeWordConfig
 
 
 class MockWakeWordDetector:
@@ -13,13 +18,22 @@ class MockWakeWordDetector:
     Allows scheduling detections at specific chunk counts for predictable testing.
     """
 
-    def __init__(self) -> None:
-        """Initialize mock detector."""
+    def __init__(self, config: "WakeWordConfig | None" = None) -> None:
+        """Initialize mock detector.
+
+        Args:
+            config: Optional wake word configuration. If provided, initializes
+                   with the configured keyword and sensitivity.
+        """
         self._keywords: list[str] = []
         self._sensitivity: float = 0.5
         self._chunk_count: int = 0
         self._scheduled_detections: dict[int, float] = {}  # chunk_num -> confidence
         self._initialized: bool = False
+
+        # Apply config if provided
+        if config is not None:
+            self.initialize(keywords=[config.keyword], sensitivity=config.sensitivity)
 
     def initialize(self, keywords: list[str], sensitivity: float) -> None:
         """Initialize with keywords and sensitivity."""

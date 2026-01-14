@@ -48,9 +48,11 @@ class TestCloudLLMConfig:
 
         # Create environment without the API key
         env_without_key = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
-        with patch.dict(os.environ, env_without_key, clear=True):
-            with pytest.raises(ValueError, match="ANTHROPIC_API_KEY"):
-                CloudLLMConfig.from_env()
+        with (
+            patch.dict(os.environ, env_without_key, clear=True),
+            pytest.raises(ValueError, match="ANTHROPIC_API_KEY"),
+        ):
+            CloudLLMConfig.from_env()
 
 
 class TestCloudLanguageModel:

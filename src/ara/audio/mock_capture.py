@@ -69,13 +69,11 @@ class MockAudioCapture:
                 )
             if wf.getnchannels() != self._channels:
                 raise ValueError(
-                    f"Channel count mismatch: file={wf.getnchannels()}, "
-                    f"expected={self._channels}"
+                    f"Channel count mismatch: file={wf.getnchannels()}, expected={self._channels}"
                 )
             if wf.getframerate() != self._sample_rate:
                 raise ValueError(
-                    f"Sample rate mismatch: file={wf.getframerate()}, "
-                    f"expected={self._sample_rate}"
+                    f"Sample rate mismatch: file={wf.getframerate()}, expected={self._sample_rate}"
                 )
             self._audio_source = wf.readframes(wf.getnframes())
             self._source_position = 0
@@ -156,10 +154,7 @@ class MockAudioCapture:
             yield chunk
 
             # If we have a source and it's exhausted, stop
-            if (
-                self._audio_source is not None
-                and self._source_position >= len(self._audio_source)
-            ):
+            if self._audio_source is not None and self._source_position >= len(self._audio_source):
                 break
 
             # Simulate real-time by sleeping

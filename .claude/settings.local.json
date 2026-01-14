@@ -1,7 +1,21 @@
 {
   "permissions": {
     "allow": [
-      "Bash(PYTHONPATH=src python -m pytest:*)"
+      "Bash(PYTHONPATH=src python -m pytest:*)",
+      "Bash(git fetch:*)",
+      "Bash(.specify/scripts/bash/update-agent-context.sh:*)",
+      "Bash(PYTHONPATH=src python:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfeat: add timer countdown announcement with personalized greeting\n\nImplement 5-second verbal countdown before timers/reminders reach zero:\n- Add countdown phrase generation with user name personalization\n- Combine overlapping reminders within 5-second window into single countdown\n- Handle short timers \\(<5s\\) by starting countdown from remaining time\n- Add USER_NAME_SET intent for \"my name is\", \"call me\" voice commands\n- Update personality to concise tone with brief responses\n\nNew files:\n- src/ara/config/user_profile.py: User profile persistence\n- tests/unit/test_countdown.py: Countdown unit tests\n- tests/unit/test_user_profile.py: Profile load/save tests\n- tests/integration/test_countdown_flow.py: E2E countdown tests\n- specs/003-timer-countdown/: Feature specification and docs\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git push:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nci: add PortAudio system dependencies for PyAudio build\n\nInstall portaudio19-dev on Ubuntu and portaudio on macOS before\npip install to fix PyAudio wheel build failure.\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(gh pr checks:*)",
+      "Bash(gh run view:*)",
+      "Bash(ruff check:*)",
+      "Bash(git commit:*)",
+      "Bash(ruff format:*)",
+      "Bash(python -m mypy:*)",
+      "Bash(pip show:*)"
     ]
   }
 }

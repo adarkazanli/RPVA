@@ -12,6 +12,9 @@ class IntentType(Enum):
     """Types of intents the system can handle."""
 
     GENERAL_QUESTION = "general_question"
+    TIME_QUERY = "time_query"
+    DATE_QUERY = "date_query"
+    FUTURE_TIME_QUERY = "future_time_query"
     TIMER_SET = "timer_set"
     TIMER_CANCEL = "timer_cancel"
     TIMER_QUERY = "timer_query"
@@ -22,6 +25,7 @@ class IntentType(Enum):
     HISTORY_QUERY = "history_query"
     WEB_SEARCH = "web_search"
     SYSTEM_COMMAND = "system_command"
+    USER_NAME_SET = "user_name_set"
     UNKNOWN = "unknown"
 
 
@@ -68,6 +72,8 @@ class IntentClassifier:
         r"remind\s+me\s+(?:to\s+)?(.+?)(?:\s+(?:in|at)\s+(.+))?$",
         r"set\s+(?:a\s+)?reminder\s+(?:to\s+)?(.+?)(?:\s+(?:in|at)\s+(.+))?$",
         r"don'?t\s+let\s+me\s+forget\s+(?:to\s+)?(.+)",
+        # "wake me up" patterns - message defaults to "wake up", time is extracted
+        r"wake\s+me\s+(?:up\s+)?(in|at)\s+(.+)",
     ]
 
     REMINDER_CANCEL_PATTERNS = [
@@ -88,8 +94,9 @@ class IntentClassifier:
 
     REMINDER_QUERY_PATTERNS = [
         r"what\s+reminders?\s+(?:do\s+I\s+have|are\s+set)",
-        r"(?:list|show)\s+(?:my\s+)?reminders?",
+        r"(?:list|show|view)\s+(?:my\s+)?reminders?",
         r"check\s+(?:my\s+)?reminders?",
+        r"(?:what\s+are\s+)?my\s+reminders?",
     ]
 
     REMINDER_CLEAR_ALL_PATTERNS = [
@@ -125,35 +132,88 @@ class IntentClassifier:
         (r"status", "status"),
     ]
 
+    # User name set patterns
+    USER_NAME_SET_PATTERNS = [
+        r"my\s+name\s+is\s+(\w+)",
+        r"call\s+me\s+(\w+)",
+        r"(?:set|change|update)\s+my\s+name\s+to\s+(\w+)",
+        r"i'?m\s+(\w+)",  # Handle "I'm" contraction
+        r"i\s+am\s+(\w+)",  # Handle "I am" expanded form
+    ]
+
+    # Time query patterns - must be checked before general questions
+    TIME_QUERY_PATTERNS = [
+        r"what\s+time\s+is\s+it",
+        r"what\s+is\s+(?:the\s+)?(?:current\s+)?time",
+        r"what'?s\s+the\s+time",
+        r"what\s+time\s+do\s+you\s+have",
+        r"what\s+time\s+(?:is\s+it\s+)?(?:right\s+)?now",
+        r"(?:can\s+you\s+)?tell\s+me\s+(?:the\s+)?time",
+        r"(?:do\s+you\s+)?have\s+(?:the\s+)?time",
+        r"current\s+time",
+        r"time\s+(?:please|now)",
+    ]
+
+    # Date query patterns
+    DATE_QUERY_PATTERNS = [
+        r"what\s+is\s+(?:the\s+)?(?:today'?s\s+)?date",
+        r"what'?s\s+the\s+date\s*(?:today)?",
+        r"what\s+day\s+is\s+(?:it|today)",
+        r"what'?s\s+today",
+        r"(?:can\s+you\s+)?tell\s+me\s+(?:the\s+)?date",
+        r"today'?s\s+date",
+    ]
+
+    # Future time query patterns (what time will it be in X hours/minutes)
+    # Supports both numeric (1, 2) and word form (one, two) numbers
+    # Supports "in X hours", "after X hours", "X hours from now"
+    FUTURE_TIME_QUERY_PATTERNS = [
+        r"what\s+time\s+(?:will\s+it\s+be|would\s+it\s+be)\s+(?:in|after)\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s*(hour|hr|minute|min)s?",
+        r"what\s+(?:will|would)\s+(?:the\s+)?time\s+be\s+(?:in|after)\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s*(hour|hr|minute|min)s?",
+        r"(?:in|after)\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s*(hour|hr|minute|min)s?\s+what\s+time\s+(?:will|would)\s+it\s+be",
+        r"time\s+(?:in|after)\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s*(hour|hr|minute|min)s?",
+        r"(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s*(hour|hr|minute|min)s?\s+from\s+now",
+    ]
+
+    # Word number to digit mapping
+    WORD_NUMBERS = {
+        "one": 1,
+        "two": 2,
+        "three": 3,
+        "four": 4,
+        "five": 5,
+        "six": 6,
+        "seven": 7,
+        "eight": 8,
+        "nine": 9,
+        "ten": 10,
+        "eleven": 11,
+        "twelve": 12,
+    }
+
     def __init__(self) -> None:
         """Initialize the classifier."""
         # Pre-compile patterns for efficiency
         self._timer_set = [re.compile(p, re.IGNORECASE) for p in self.TIMER_SET_PATTERNS]
-        self._timer_cancel = [
-            re.compile(p, re.IGNORECASE) for p in self.TIMER_CANCEL_PATTERNS
-        ]
-        self._timer_query = [
-            re.compile(p, re.IGNORECASE) for p in self.TIMER_QUERY_PATTERNS
-        ]
-        self._reminder_set = [
-            re.compile(p, re.IGNORECASE) for p in self.REMINDER_SET_PATTERNS
-        ]
+        self._timer_cancel = [re.compile(p, re.IGNORECASE) for p in self.TIMER_CANCEL_PATTERNS]
+        self._timer_query = [re.compile(p, re.IGNORECASE) for p in self.TIMER_QUERY_PATTERNS]
+        self._reminder_set = [re.compile(p, re.IGNORECASE) for p in self.REMINDER_SET_PATTERNS]
         self._reminder_cancel = [
             re.compile(p, re.IGNORECASE) for p in self.REMINDER_CANCEL_PATTERNS
         ]
-        self._reminder_query = [
-            re.compile(p, re.IGNORECASE) for p in self.REMINDER_QUERY_PATTERNS
-        ]
+        self._reminder_query = [re.compile(p, re.IGNORECASE) for p in self.REMINDER_QUERY_PATTERNS]
         self._reminder_clear_all = [
             re.compile(p, re.IGNORECASE) for p in self.REMINDER_CLEAR_ALL_PATTERNS
         ]
-        self._history_query = [
-            re.compile(p, re.IGNORECASE) for p in self.HISTORY_QUERY_PATTERNS
-        ]
-        self._web_search = [
-            re.compile(p, re.IGNORECASE) for p in self.WEB_SEARCH_PATTERNS
-        ]
+        self._history_query = [re.compile(p, re.IGNORECASE) for p in self.HISTORY_QUERY_PATTERNS]
+        self._web_search = [re.compile(p, re.IGNORECASE) for p in self.WEB_SEARCH_PATTERNS]
         self._system = [(re.compile(p, re.IGNORECASE), cmd) for p, cmd in self.SYSTEM_PATTERNS]
+        self._user_name_set = [re.compile(p, re.IGNORECASE) for p in self.USER_NAME_SET_PATTERNS]
+        self._time_query = [re.compile(p, re.IGNORECASE) for p in self.TIME_QUERY_PATTERNS]
+        self._date_query = [re.compile(p, re.IGNORECASE) for p in self.DATE_QUERY_PATTERNS]
+        self._future_time_query = [
+            re.compile(p, re.IGNORECASE) for p in self.FUTURE_TIME_QUERY_PATTERNS
+        ]
 
     def classify(self, text: str) -> Intent:
         """Classify the given text into an intent.
@@ -203,6 +263,22 @@ class IntentClassifier:
 
         # System commands
         if intent := self._try_system_command(text):
+            return intent
+
+        # User name set
+        if intent := self._try_user_name_set(text):
+            return intent
+
+        # Future time query - check before time query (more specific)
+        if intent := self._try_future_time_query(text):
+            return intent
+
+        # Time query - check before general questions
+        if intent := self._try_time_query(text):
+            return intent
+
+        # Date query - check before general questions
+        if intent := self._try_date_query(text):
             return intent
 
         # Default to general question
@@ -278,13 +354,19 @@ class IntentClassifier:
                 entities = {}
                 groups = match.groups()
 
-                # Extract message
-                if groups and groups[0]:
-                    entities["message"] = groups[0].strip()
-
-                # Extract time if present
-                if len(groups) > 1 and groups[1]:
-                    entities["time"] = groups[1].strip()
+                # Handle "wake me up" pattern specially
+                # Pattern: r"wake\s+me\s+(?:up\s+)?(in|at)\s+(.+)"
+                # Group 1 is "in" or "at", Group 2 is the time
+                if text.lower().startswith("wake"):
+                    entities["message"] = "wake up"
+                    if len(groups) >= 2 and groups[1]:
+                        entities["time"] = groups[1].strip()
+                else:
+                    # Standard pattern: Group 1 is message, Group 2 is time
+                    if groups and groups[0]:
+                        entities["message"] = groups[0].strip()
+                    if len(groups) > 1 and groups[1]:
+                        entities["time"] = groups[1].strip()
 
                 return Intent(
                     type=IntentType.REMINDER_SET,
@@ -379,6 +461,78 @@ class IntentClassifier:
                     type=IntentType.SYSTEM_COMMAND,
                     confidence=0.95,
                     entities={"command": command},
+                    raw_text=text,
+                )
+        return None
+
+    def _try_user_name_set(self, text: str) -> Intent | None:
+        """Try to match user name set patterns."""
+        for pattern in self._user_name_set:
+            match = pattern.search(text)
+            if match:
+                entities = {}
+                groups = match.groups()
+
+                # Extract the name from the match
+                if groups and groups[0]:
+                    name = groups[0].strip()
+                    # Capitalize first letter
+                    entities["name"] = name.capitalize()
+
+                return Intent(
+                    type=IntentType.USER_NAME_SET,
+                    confidence=0.9,
+                    entities=entities,
+                    raw_text=text,
+                )
+        return None
+
+    def _try_time_query(self, text: str) -> Intent | None:
+        """Try to match time query patterns."""
+        for pattern in self._time_query:
+            if pattern.search(text):
+                return Intent(
+                    type=IntentType.TIME_QUERY,
+                    confidence=0.95,
+                    entities={},
+                    raw_text=text,
+                )
+        return None
+
+    def _try_date_query(self, text: str) -> Intent | None:
+        """Try to match date query patterns."""
+        for pattern in self._date_query:
+            if pattern.search(text):
+                return Intent(
+                    type=IntentType.DATE_QUERY,
+                    confidence=0.95,
+                    entities={},
+                    raw_text=text,
+                )
+        return None
+
+    def _try_future_time_query(self, text: str) -> Intent | None:
+        """Try to match future time query patterns."""
+        for pattern in self._future_time_query:
+            match = pattern.search(text)
+            if match:
+                entities = {}
+                groups = match.groups()
+
+                # Extract amount and unit
+                if groups and len(groups) >= 2:
+                    amount_str = groups[0].lower()
+                    # Convert word numbers to digits
+                    if amount_str in self.WORD_NUMBERS:
+                        entities["amount"] = str(self.WORD_NUMBERS[amount_str])
+                    else:
+                        entities["amount"] = amount_str
+                    entities["unit"] = groups[1].lower()
+
+                return Intent(
+                    type=IntentType.FUTURE_TIME_QUERY,
+                    confidence=0.95,
+                    entities=entities,
                     raw_text=text,
                 )
         return None

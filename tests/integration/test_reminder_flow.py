@@ -62,13 +62,13 @@ class TestReminderSetFlow:
         assert len(pending) >= 1
 
     def test_set_reminder_response_includes_times(self, orchestrator: Orchestrator) -> None:
-        """Test that set reminder response includes current and target times."""
+        """Test that set reminder response includes target time."""
         response = orchestrator.process("remind me to take medicine in 30 minutes")
 
         # Response should include time information
         assert ":" in response  # Time format includes colon
-        # Should mention both times
-        assert "now" in response.lower() or "at" in response.lower()
+        # Should confirm the reminder was set (concise format from 003-timer-countdown)
+        assert "reminder" in response.lower() or "got it" in response.lower()
 
     def test_set_reminder_flow_end_to_end(self, orchestrator: Orchestrator) -> None:
         """Test complete reminder set flow."""

@@ -58,7 +58,10 @@ class TestVoiceLoopIntegration:
         # Verify the pipeline worked
         assert result is not None
         assert result.transcript == "what time is it"
-        assert "3:30" in result.response_text
+        # Time queries now return actual system time
+        assert result.intent == "time_query"
+        assert "It's" in result.response_text
+        assert "AM" in result.response_text or "PM" in result.response_text
 
         # Verify TTS was called
         assert mock_components["synthesizer"].call_count == 1
@@ -79,9 +82,7 @@ class TestVoiceLoopIntegration:
         # Check feedback was played for wake word
         assert FeedbackType.WAKE_WORD_DETECTED in mock_components["feedback"].events
 
-    def test_latency_tracking(
-        self, orchestrator: Orchestrator, mock_components: dict
-    ) -> None:
+    def test_latency_tracking(self, orchestrator: Orchestrator, mock_components: dict) -> None:
         """Test that latency is tracked for each stage."""
         mock_components["wake_word"].schedule_detection(at_chunk=0, confidence=0.9)
         mock_components["transcriber"].set_response("test")
@@ -96,9 +97,7 @@ class TestVoiceLoopIntegration:
         assert "tts_ms" in result.latency_breakdown
         assert result.total_latency_ms > 0
 
-    def test_error_handling(
-        self, orchestrator: Orchestrator, mock_components: dict
-    ) -> None:
+    def test_error_handling(self, orchestrator: Orchestrator, mock_components: dict) -> None:
         """Test that errors are handled gracefully."""
         mock_components["wake_word"].schedule_detection(at_chunk=0, confidence=0.9)
         mock_components["transcriber"].set_error("Transcription failed")

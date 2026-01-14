@@ -108,12 +108,12 @@ def detect_accelerator() -> Accelerator:
     try:
         import subprocess
 
-        result = subprocess.run(
+        nvidia_result = subprocess.run(
             ["nvidia-smi"],
             capture_output=True,
             timeout=5,
         )
-        if result.returncode == 0:
+        if nvidia_result.returncode == 0:
             return Accelerator.CUDA
     except (subprocess.SubprocessError, FileNotFoundError):
         pass
@@ -133,12 +133,13 @@ def detect_profile() -> Profile:
     """
     # Check environment variable first
     env_profile = os.environ.get("ARA_PROFILE", "").lower()
-    if env_profile == "prod":
-        return Profile.PROD
-    elif env_profile == "dev":
-        return Profile.DEV
-    elif env_profile == "test":
-        return Profile.TEST
+    profile_map = {
+        "prod": Profile.PROD,
+        "dev": Profile.DEV,
+        "test": Profile.TEST,
+    }
+    if env_profile in profile_map:
+        return profile_map[env_profile]
 
     # Auto-detect based on platform
     plat = detect_platform()

@@ -179,6 +179,8 @@ class InteractionLogger:
         self._device_id = device_id
         self._current_session: Session | None = None
         self._session_timeout_minutes = 5
+        self._storage: "InteractionStorage | None"  # noqa: UP037
+        self._interactions: list[Interaction] = []
 
         if storage is not None:
             self._storage = storage
@@ -193,7 +195,6 @@ class InteractionLogger:
         else:
             # In-memory storage for testing
             self._storage = None
-            self._interactions: list[Interaction] = []
 
     @property
     def current_session(self) -> Session | None:
@@ -204,6 +205,11 @@ class InteractionLogger:
     def device_id(self) -> str:
         """Get the device ID."""
         return self._device_id
+
+    @property
+    def storage(self) -> "InteractionStorage | None":
+        """Get the storage instance."""
+        return self._storage
 
     def log(
         self,
@@ -242,6 +248,7 @@ class InteractionLogger:
         # Ensure we have a session
         if self._current_session is None:
             self._start_session(mode)
+        assert self._current_session is not None
 
         interaction = Interaction(
             id=uuid.uuid4(),
@@ -316,19 +323,11 @@ class InteractionLogger:
             List of interactions from that date.
         """
         if self._storage is not None:
-            start = datetime.combine(target_date, datetime.min.time()).replace(
-                tzinfo=UTC
-            )
-            end = datetime.combine(target_date, datetime.max.time()).replace(
-                tzinfo=UTC
-            )
+            start = datetime.combine(target_date, datetime.min.time()).replace(tzinfo=UTC)
+            end = datetime.combine(target_date, datetime.max.time()).replace(tzinfo=UTC)
             return self._storage.sqlite.get_by_date_range(start, end)
         else:
-            return [
-                i
-                for i in self._interactions
-                if i.timestamp.date() == target_date
-            ]
+            return [i for i in self._interactions if i.timestamp.date() == target_date]
 
 
 __all__ = [

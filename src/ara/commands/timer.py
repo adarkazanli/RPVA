@@ -151,9 +151,12 @@ class TimerManager:
         """
         name_lower = name.lower()
         for timer in self._timers.values():
-            if timer.name and timer.name.lower() == name_lower:
-                if timer.status == TimerStatus.RUNNING:
-                    return timer
+            if (
+                timer.name
+                and timer.name.lower() == name_lower
+                and timer.status == TimerStatus.RUNNING
+            ):
+                return timer
         return None
 
     def list_active(self) -> list[Timer]:
@@ -163,7 +166,8 @@ class TimerManager:
             List of active timers.
         """
         return [
-            t for t in self._timers.values()
+            t
+            for t in self._timers.values()
             if t.status in (TimerStatus.RUNNING, TimerStatus.PAUSED)
         ]
 
@@ -225,9 +229,7 @@ class TimerManager:
             return False
 
         if timer._remaining_when_paused is not None:
-            timer.expires_at = datetime.now(UTC) + timedelta(
-                seconds=timer._remaining_when_paused
-            )
+            timer.expires_at = datetime.now(UTC) + timedelta(seconds=timer._remaining_when_paused)
 
         timer._remaining_when_paused = None
         timer._paused_at = None
@@ -299,10 +301,13 @@ def parse_duration(text: str) -> int | None:
 
     # If no pattern matched, try parsing as just a number (assume minutes)
     if not found_match:
-        try:
-            number = int(re.search(r"(\d+)", text).group(1))
-            return number * 60  # Assume minutes
-        except (AttributeError, ValueError):
-            return None
+        match = re.search(r"(\d+)", text)
+        if match:
+            try:
+                number = int(match.group(1))
+                return number * 60  # Assume minutes
+            except ValueError:
+                return None
+        return None
 
     return total_seconds if total_seconds > 0 else None

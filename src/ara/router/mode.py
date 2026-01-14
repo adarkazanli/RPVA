@@ -3,6 +3,7 @@
 Provides connectivity detection, mode switching, and routing decisions.
 """
 
+import contextlib
 import json
 import socket
 import threading
@@ -93,9 +94,7 @@ class NetworkMonitor:
         """
         for host, port in self.CHECK_HOSTS:
             try:
-                with socket.create_connection(
-                    (host, port), timeout=self.TIMEOUT_SECONDS
-                ):
+                with socket.create_connection((host, port), timeout=self.TIMEOUT_SECONDS):
                     return NetworkStatus.ONLINE
             except OSError:
                 continue
@@ -132,10 +131,8 @@ class NetworkMonitor:
     def _notify_status_change(self, new_status: NetworkStatus) -> None:
         """Notify listeners of status change."""
         if self._on_status_change is not None:
-            try:
+            with contextlib.suppress(Exception):
                 self._on_status_change(new_status)
-            except Exception:
-                pass  # Don't let callback errors crash the monitor
 
 
 class ModeManager:
@@ -241,10 +238,7 @@ class ModeManager:
         if self._mode == OperationMode.ONLINE_CLOUD:
             return True
 
-        if explicit_request:
-            return True
-
-        return False
+        return bool(explicit_request)
 
     def should_use_cloud_for_query(
         self,
@@ -268,10 +262,7 @@ class ModeManager:
             return complexity_score >= self._cloud_complexity_threshold
 
         # With explicit request, always use cloud
-        if explicit_request:
-            return True
-
-        return False
+        return bool(explicit_request)
 
     def get_status(self) -> dict[str, str | bool]:
         """Get comprehensive status information.
@@ -350,15 +341,11 @@ class ModeManager:
                 self._mode = OperationMode.ONLINE_LOCAL
                 self._notify_mode_change(old_mode, OperationMode.ONLINE_LOCAL)
 
-    def _notify_mode_change(
-        self, old_mode: OperationMode, new_mode: OperationMode
-    ) -> None:
+    def _notify_mode_change(self, old_mode: OperationMode, new_mode: OperationMode) -> None:
         """Notify callback of mode change."""
         if self._on_mode_change is not None:
-            try:
+            with contextlib.suppress(Exception):
                 self._on_mode_change(old_mode, new_mode)
-            except Exception:
-                pass  # Don't let callback errors crash
 
 
 __all__ = [
