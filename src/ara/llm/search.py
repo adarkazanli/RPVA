@@ -9,9 +9,9 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from .model import LanguageModel
 
-# Try to import duckduckgo_search, gracefully handle if not installed
+# Try to import ddgs (formerly duckduckgo_search), gracefully handle if not installed
 try:
-    from duckduckgo_search import DDGS
+    from ddgs import DDGS
 
     DDGS_AVAILABLE = True
 except ImportError:

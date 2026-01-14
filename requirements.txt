@@ -21,7 +21,7 @@ httpx>=0.25.0
 piper-tts>=1.2.0
 
 # Search (optional internet features)
-duckduckgo-search>=4.0.0
+ddgs>=9.0.0
 
 # Configuration
 pyyaml>=6.0
