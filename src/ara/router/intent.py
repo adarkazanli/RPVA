@@ -72,6 +72,8 @@ class IntentClassifier:
         r"remind\s+me\s+(?:to\s+)?(.+?)(?:\s+(?:in|at)\s+(.+))?$",
         r"set\s+(?:a\s+)?reminder\s+(?:to\s+)?(.+?)(?:\s+(?:in|at)\s+(.+))?$",
         r"don'?t\s+let\s+me\s+forget\s+(?:to\s+)?(.+)",
+        # "wake me up" patterns - message defaults to "wake up", time is extracted
+        r"wake\s+me\s+(?:up\s+)?(in|at)\s+(.+)",
     ]
 
     REMINDER_CANCEL_PATTERNS = [
@@ -162,11 +164,12 @@ class IntentClassifier:
 
     # Future time query patterns (what time will it be in X hours/minutes)
     # Supports both numeric (1, 2) and word form (one, two) numbers
+    # Supports "in X hours", "after X hours", "X hours from now"
     FUTURE_TIME_QUERY_PATTERNS = [
-        r"what\s+time\s+will\s+it\s+be\s+in\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s*(hour|hr|minute|min)s?",
-        r"what\s+will\s+(?:the\s+)?time\s+be\s+in\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s*(hour|hr|minute|min)s?",
-        r"in\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s*(hour|hr|minute|min)s?\s+what\s+time\s+will\s+it\s+be",
-        r"time\s+in\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s*(hour|hr|minute|min)s?",
+        r"what\s+time\s+(?:will\s+it\s+be|would\s+it\s+be)\s+(?:in|after)\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s*(hour|hr|minute|min)s?",
+        r"what\s+(?:will|would)\s+(?:the\s+)?time\s+be\s+(?:in|after)\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s*(hour|hr|minute|min)s?",
+        r"(?:in|after)\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s*(hour|hr|minute|min)s?\s+what\s+time\s+(?:will|would)\s+it\s+be",
+        r"time\s+(?:in|after)\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s*(hour|hr|minute|min)s?",
         r"(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s*(hour|hr|minute|min)s?\s+from\s+now",
     ]
 
@@ -349,13 +352,19 @@ class IntentClassifier:
                 entities = {}
                 groups = match.groups()
 
-                # Extract message
-                if groups and groups[0]:
-                    entities["message"] = groups[0].strip()
-
-                # Extract time if present
-                if len(groups) > 1 and groups[1]:
-                    entities["time"] = groups[1].strip()
+                # Handle "wake me up" pattern specially
+                # Pattern: r"wake\s+me\s+(?:up\s+)?(in|at)\s+(.+)"
+                # Group 1 is "in" or "at", Group 2 is the time
+                if text.lower().startswith("wake"):
+                    entities["message"] = "wake up"
+                    if len(groups) >= 2 and groups[1]:
+                        entities["time"] = groups[1].strip()
+                else:
+                    # Standard pattern: Group 1 is message, Group 2 is time
+                    if groups and groups[0]:
+                        entities["message"] = groups[0].strip()
+                    if len(groups) > 1 and groups[1]:
+                        entities["time"] = groups[1].strip()
 
                 return Intent(
                     type=IntentType.REMINDER_SET,
