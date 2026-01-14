@@ -169,6 +169,10 @@ class IntentClassifier:
         # Stock/finance patterns
         r"(?:what(?:'s|'s|\s+is)\s+)?(?:the\s+)?(?:stock\s+)?price\s+(?:of|for)\s+(.+)",
         r"(?:how(?:'s|'s|\s+is)\s+)?(.+)\s+(?:stock|trading)",
+        # Distance/direction patterns
+        r"(?:what(?:'s|'s|\s+is)\s+)?(?:the\s+)?distance\s+(?:between|from)\s+(.+)",
+        r"how\s+far\s+(?:is\s+it\s+)?(?:from\s+)?(.+?)(?:\s+to\s+.+)?",
+        r"how\s+(?:long|far)\s+(?:does\s+it\s+take|is\s+it)\s+(?:to\s+)?(?:drive|get|travel)\s+(?:from\s+)?(.+)",
     ]
 
     # System command patterns
