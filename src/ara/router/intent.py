@@ -18,6 +18,7 @@ class IntentType(Enum):
     REMINDER_SET = "reminder_set"
     REMINDER_CANCEL = "reminder_cancel"
     REMINDER_QUERY = "reminder_query"
+    REMINDER_CLEAR_ALL = "reminder_clear_all"
     HISTORY_QUERY = "history_query"
     WEB_SEARCH = "web_search"
     SYSTEM_COMMAND = "system_command"
@@ -73,12 +74,27 @@ class IntentClassifier:
         r"cancel\s+(?:the\s+)?(?:my\s+)?reminder",
         r"delete\s+(?:the\s+)?(?:my\s+)?reminder",
         r"remove\s+(?:the\s+)?(?:my\s+)?reminder",
+        # Cancel by ordinal: "cancel the first/second/third reminder"
+        r"cancel\s+(?:the\s+)?(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)\s+(?:reminder|one)",
+        r"delete\s+(?:the\s+)?(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)\s+(?:reminder|one)",
+        # Cancel by number: "cancel reminder number 3", "cancel reminder 3"
+        r"cancel\s+(?:the\s+)?(?:my\s+)?reminders?\s+(?:number\s+)?\d+",
+        r"delete\s+(?:the\s+)?(?:my\s+)?reminders?\s+(?:number\s+)?\d+",
+        # Cancel multiple by number: "cancel reminders 1, 2, and 3"
+        r"cancel\s+(?:the\s+)?(?:my\s+)?reminders?\s+\d+(?:,?\s*(?:and\s+)?\d+)+",
+        # Cancel multiple by ordinal: "cancel the first, third, and fifth reminders"
+        r"cancel\s+(?:the\s+)?(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)(?:,?\s*(?:and\s+)?(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth))+\s+reminders?",
     ]
 
     REMINDER_QUERY_PATTERNS = [
         r"what\s+reminders?\s+(?:do\s+I\s+have|are\s+set)",
         r"(?:list|show)\s+(?:my\s+)?reminders?",
         r"check\s+(?:my\s+)?reminders?",
+    ]
+
+    REMINDER_CLEAR_ALL_PATTERNS = [
+        r"(?:clear|delete|remove|cancel)\s+all\s+(?:my\s+)?reminders?",
+        r"(?:clear|delete|remove|cancel)\s+(?:my\s+)?reminders?\s+all",
     ]
 
     # History query patterns
@@ -89,8 +105,10 @@ class IntentClassifier:
         r"what\s+have\s+I\s+(?:asked|said)\s+(?:recently|today)",
     ]
 
-    # Web search patterns
+    # Web search patterns (more specific patterns first)
     WEB_SEARCH_PATTERNS = [
+        r"search\s+(?:the\s+)?internet\s+(?:for\s+)?(.+)",
+        r"search\s+(?:the\s+)?web\s+(?:for\s+)?(.+)",
         r"search\s+(?:for\s+)?(.+)",
         r"look\s+up\s+(.+)",
         r"with\s+internet[,\s]+(.+)",
@@ -125,6 +143,9 @@ class IntentClassifier:
         ]
         self._reminder_query = [
             re.compile(p, re.IGNORECASE) for p in self.REMINDER_QUERY_PATTERNS
+        ]
+        self._reminder_clear_all = [
+            re.compile(p, re.IGNORECASE) for p in self.REMINDER_CLEAR_ALL_PATTERNS
         ]
         self._history_query = [
             re.compile(p, re.IGNORECASE) for p in self.HISTORY_QUERY_PATTERNS
@@ -162,8 +183,10 @@ class IntentClassifier:
         if intent := self._try_timer_query(text):
             return intent
 
-        # Reminder intents
+        # Reminder intents (clear all must come before cancel to avoid false positive)
         if intent := self._try_reminder_set(text):
+            return intent
+        if intent := self._try_reminder_clear_all(text):
             return intent
         if intent := self._try_reminder_cancel(text):
             return intent
@@ -290,6 +313,18 @@ class IntentClassifier:
                 return Intent(
                     type=IntentType.REMINDER_QUERY,
                     confidence=0.85,
+                    entities={},
+                    raw_text=text,
+                )
+        return None
+
+    def _try_reminder_clear_all(self, text: str) -> Intent | None:
+        """Try to match clear all reminders patterns."""
+        for pattern in self._reminder_clear_all:
+            if pattern.search(text):
+                return Intent(
+                    type=IntentType.REMINDER_CLEAR_ALL,
+                    confidence=0.95,
                     entities={},
                     raw_text=text,
                 )

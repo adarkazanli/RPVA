@@ -1335,6 +1335,25 @@ htop
 | News | "Ara, **check the news** about..." |
 | Help | "Ara, what can you do?" |
 
+### Reminder Commands
+
+| Command | Example | Response |
+|---------|---------|----------|
+| Set reminder | "Remind me in 30 minutes to check the oven" | "Got it! It's 3:45 PM now, and I'll remind you at 4:15 PM to check the oven." |
+| Set reminder (at time) | "Remind me at 5 PM to call mom" | "Got it! It's 3:45 PM now, and I'll remind you at 5:00 PM to call mom." |
+| List reminders | "What reminders do I have?" | "You've got 3 reminders! First, you have a reminder at 4:15 PM to check the oven. Second, ..." |
+| Cancel by number | "Cancel the first reminder" | "Done! I've cancelled your reminder to check the oven." |
+| Cancel multiple | "Cancel reminders 2 and 4" | "Done! I've cancelled 2 reminders." |
+| Cancel by description | "Cancel my reminder about the oven" | "Done! I've cancelled your reminder to check the oven." |
+| Clear all | "Clear all my reminders" | "Fresh start! I've cleared all 3 of your reminders." |
+
+**Reminder Features:**
+- Time-aware confirmations show both current time and target time
+- Reminders persist across restarts (saved to `~/.ara/reminders.json`)
+- Numbered listing uses ordinals (first, second, third... 11th, 12th...)
+- Missed reminders are delivered on startup with explanation
+- Supports relative times ("in 30 minutes") and absolute times ("at 5 PM")
+
 ---
 
 *Built for Ammar's Ara Voice Assistant Project — January 2026*

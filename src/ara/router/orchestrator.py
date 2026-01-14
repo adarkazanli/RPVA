@@ -23,15 +23,50 @@ if TYPE_CHECKING:
     from ..wake_word.detector import WakeWordDetector
     from .mode import ModeManager
 
-from datetime import UTC
+from datetime import UTC, datetime
 
-from ..commands.reminder import ReminderManager, parse_reminder_time
+from ..commands.reminder import (
+    ReminderManager,
+    ReminderStatus,
+    format_time_local,
+    parse_reminder_time,
+)
 from ..commands.system import SystemCommandHandler
 from ..commands.timer import TimerManager, parse_duration
+from ..config.loader import get_reminders_path
+from ..config.personality import get_default_personality
 from ..feedback import FeedbackType
 from .intent import Intent, IntentClassifier, IntentType
 
 logger = logging.getLogger(__name__)
+
+
+def _get_ordinal(n: int) -> str:
+    """Get ordinal representation of a number.
+
+    Args:
+        n: Number to convert (1-based).
+
+    Returns:
+        Ordinal string (first, second, ... tenth, 11th, 12th, etc.)
+    """
+    ordinals = {
+        1: "first", 2: "second", 3: "third", 4: "fourth", 5: "fifth",
+        6: "sixth", 7: "seventh", 8: "eighth", 9: "ninth", 10: "tenth",
+    }
+
+    if n in ordinals:
+        return ordinals[n]
+
+    # For numbers > 10, use numeric ordinals
+    if n % 10 == 1 and n % 100 != 11:
+        return f"{n}st"
+    elif n % 10 == 2 and n % 100 != 12:
+        return f"{n}nd"
+    elif n % 10 == 3 and n % 100 != 13:
+        return f"{n}rd"
+    else:
+        return f"{n}th"
 
 
 @dataclass
@@ -115,7 +150,10 @@ class Orchestrator:
         # Intent classification and command handling
         self._intent_classifier = IntentClassifier()
         self._timer_manager = TimerManager(on_expire=self._on_timer_expire)
-        self._reminder_manager = ReminderManager(on_trigger=self._on_reminder_trigger)
+        self._reminder_manager = ReminderManager(
+            on_trigger=self._on_reminder_trigger,
+            persistence_path=get_reminders_path(),
+        )
 
         # System command handler (if mode manager is provided)
         self._system_handler = (
@@ -128,6 +166,16 @@ class Orchestrator:
         # Configuration
         self._silence_timeout_ms = 2000  # Stop recording after 2s silence
         self._max_recording_ms = 10000  # Max 10s recording
+
+        # Load personality configuration
+        self._personality = get_default_personality()
+        if self._llm:
+            self._llm.set_system_prompt(self._personality.system_prompt)
+            logger.info(f"Loaded personality: {self._personality.name}")
+
+        # Track missed reminders to deliver on first interaction
+        self._missed_reminders: list = []
+        self._check_missed_reminders()
 
     @classmethod
     def from_config(
@@ -328,9 +376,11 @@ class Orchestrator:
         elif intent.type == IntentType.REMINDER_SET:
             return self._handle_reminder_set(intent, interaction_id)
         elif intent.type == IntentType.REMINDER_CANCEL:
-            return self._handle_reminder_cancel()
+            return self._handle_reminder_cancel(intent)
         elif intent.type == IntentType.REMINDER_QUERY:
             return self._handle_reminder_query()
+        elif intent.type == IntentType.REMINDER_CLEAR_ALL:
+            return self._handle_reminder_clear_all()
         elif intent.type == IntentType.HISTORY_QUERY:
             return self._handle_history_query(intent)
         elif intent.type == IntentType.WEB_SEARCH:
@@ -414,7 +464,7 @@ class Orchestrator:
         return " ".join(lines)
 
     def _handle_reminder_set(self, intent: Intent, interaction_id: uuid.UUID) -> str:
-        """Handle reminder set intent."""
+        """Handle reminder set intent with time-aware confirmation."""
         message = intent.entities.get("message", intent.raw_text)
         time_str = intent.entities.get("time", "")
 
@@ -425,47 +475,177 @@ class Orchestrator:
             remind_at = parse_reminder_time(intent.raw_text)
 
         if remind_at is None:
-            return "I couldn't understand when to remind you. Please try again."
+            return "When would you like me to remind you? Just say something like 'in 5 minutes' or 'at 3 PM'."
 
-        reminder = self._reminder_manager.create(
+        # Validate duration is positive
+        now = datetime.now(UTC)
+        if remind_at <= now:
+            return "Hmm, I can't set a reminder for the past! How about a few minutes from now?"
+
+        self._reminder_manager.create(
             message=message,
             remind_at=remind_at,
             interaction_id=interaction_id,
         )
 
-        time_formatted = remind_at.strftime("%I:%M %p")
-        return f"Reminder set for {time_formatted}: {message}"
+        # Format with both current time and target time
+        current_time = format_time_local(now)
+        target_time = format_time_local(remind_at)
+        return f"Got it! It's {current_time} now, and I'll remind you at {target_time} to {message}."
 
-    def _handle_reminder_cancel(self) -> str:
-        """Handle reminder cancel intent."""
+    def _handle_reminder_cancel(self, intent: Intent) -> str:
+        """Handle reminder cancel intent with support for cancel by number."""
         pending = self._reminder_manager.list_pending()
 
         if not pending:
-            return "You have no pending reminders to cancel."
+            return "You don't have any reminders to cancel."
 
-        # Cancel the next pending reminder
+        # Check if user specified a number
+        numbers = self._extract_reminder_numbers(intent.raw_text)
+
+        if numbers:
+            # Cancel by number(s)
+            cancelled = []
+            invalid = []
+
+            for num in numbers:
+                if 1 <= num <= len(pending):
+                    reminder = pending[num - 1]
+                    self._reminder_manager.cancel(reminder.id)
+                    time_str = format_time_local(reminder.remind_at)
+                    cancelled.append(f"the {_get_ordinal(num)} one ({reminder.message} at {time_str})")
+                else:
+                    invalid.append(num)
+
+            if invalid:
+                return f"Hmm, I only have {len(pending)} reminders right now. Want me to list them so you can pick the right one?"
+
+            if len(cancelled) == 1:
+                return f"Done! I've cancelled {cancelled[0]}."
+            else:
+                return f"Done! I've cancelled {len(cancelled)} reminders: {' and '.join(cancelled)}."
+
+        # Check if user specified a description
+        description = intent.entities.get("description", "")
+        if description:
+            for reminder in pending:
+                if description.lower() in reminder.message.lower():
+                    self._reminder_manager.cancel(reminder.id)
+                    return f"Done! I've cancelled your reminder about {reminder.message}."
+            return "I couldn't find a reminder about that. Want me to list what you have?"
+
+        # Ambiguous - multiple reminders exist
+        if len(pending) > 1:
+            return "You have a few reminders - which one should I cancel? You can say the reminder number, like 'cancel reminder 2', or describe it."
+
+        # Single reminder - cancel it
         reminder = pending[0]
         self._reminder_manager.cancel(reminder.id)
-        return f"Reminder cancelled: {reminder.message}"
+        return f"Done! I've cancelled your reminder to {reminder.message}."
+
+    def _extract_reminder_numbers(self, text: str) -> list[int]:
+        """Extract reminder numbers from text.
+
+        Supports:
+        - Cardinal numbers: "1", "2", "3"
+        - Ordinal words: "first", "second", "third"
+        - Multiple: "2, 4, and 5", "the third and sixth"
+
+        Returns:
+            List of 1-based reminder indices.
+        """
+        import re
+
+        text_lower = text.lower()
+        numbers = []
+
+        # Ordinal word to number mapping
+        ordinal_words = {
+            "first": 1, "second": 2, "third": 3, "fourth": 4, "fifth": 5,
+            "sixth": 6, "seventh": 7, "eighth": 8, "ninth": 9, "tenth": 10,
+        }
+
+        # Extract ordinal words
+        for word, num in ordinal_words.items():
+            if word in text_lower:
+                numbers.append(num)
+
+        # Extract cardinal numbers (including "reminder number N" and "reminder N")
+        cardinal_matches = re.findall(r"(?:reminder\s+(?:number\s+)?)?(\d+)", text_lower)
+        for match in cardinal_matches:
+            num = int(match)
+            if num not in numbers and num > 0:
+                numbers.append(num)
+
+        return sorted(set(numbers))
 
     def _handle_reminder_query(self) -> str:
-        """Handle reminder query intent."""
+        """Handle reminder query intent with numbered format."""
         pending = self._reminder_manager.list_pending()
 
         if not pending:
-            return "You have no pending reminders."
+            return "Your schedule is clear - no reminders set right now!"
 
         if len(pending) == 1:
             reminder = pending[0]
-            formatted = self._reminder_manager.format_reminder(reminder)
-            return formatted
+            time_str = format_time_local(reminder.remind_at)
+            return f"You have one reminder at {time_str} to {reminder.message}."
 
-        lines = ["You have the following reminders:"]
-        for reminder in pending[:5]:  # Limit to 5
-            formatted = self._reminder_manager.format_reminder(reminder)
-            lines.append(f"  {formatted}")
+        # Multiple reminders - use numbered format
+        parts = [f"You've got {len(pending)} reminders coming up!"]
 
-        return " ".join(lines)
+        for i, reminder in enumerate(pending, 1):
+            time_str = format_time_local(reminder.remind_at)
+            ordinal = _get_ordinal(i)
+            parts.append(f"{ordinal.capitalize()}, you have a reminder at {time_str} to {reminder.message}.")
+
+        return " ".join(parts)
+
+    def _handle_reminder_clear_all(self) -> str:
+        """Handle clear all reminders intent."""
+        count = self._reminder_manager.clear_all()
+
+        if count == 0:
+            return "You don't have any reminders to clear - your schedule is already empty!"
+
+        return f"Done! I've cleared all {count} of your reminders. Fresh start!"
+
+    def _check_missed_reminders(self) -> None:
+        """Check for reminders that were missed during system downtime.
+
+        Stores missed reminders to deliver on next interaction.
+        """
+        missed = self._reminder_manager.check_missed()
+        if missed:
+            self._missed_reminders = missed
+            logger.info(f"Found {len(missed)} missed reminders to deliver")
+
+    def _deliver_missed_reminders(self) -> str | None:
+        """Deliver any missed reminders and return announcement.
+
+        Returns:
+            Missed reminder announcement text, or None if no missed reminders.
+        """
+        if not self._missed_reminders:
+            return None
+
+        messages = []
+        for reminder in self._missed_reminders:
+            # Mark as triggered
+            reminder.status = ReminderStatus.TRIGGERED
+            reminder.triggered_at = datetime.now(UTC)
+            messages.append(
+                f"Oops! I meant to remind you earlier but I was rebooting. "
+                f"You wanted me to remind you to {reminder.message}."
+            )
+
+        # Save the state change
+        self._reminder_manager._save()
+
+        # Clear the list
+        self._missed_reminders = []
+
+        return " ".join(messages)
 
     def _handle_history_query(self, intent: Intent) -> str:
         """Handle history query intent."""
@@ -648,6 +828,8 @@ class Orchestrator:
         silence_start: float | None = None
         recording_start = time.time()
 
+        # Small delay to avoid PyAudio segfault from rapid stop/start
+        time.sleep(0.1)
         self._capture.start()
 
         try:

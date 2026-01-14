@@ -8,6 +8,14 @@ import logging
 import os
 from typing import TYPE_CHECKING
 
+# Load .env file to get PICOVOICE_ACCESS_KEY
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv()
+except ImportError:
+    pass  # python-dotenv not installed
+
 from .detector import WakeWordResult
 
 if TYPE_CHECKING:
