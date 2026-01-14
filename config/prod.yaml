@@ -17,8 +17,10 @@ ara:
     # input_device: "seeed-4mic-voicecard"
 
   # STT optimized for Pi (CPU only)
+  # small.en: More accurate, requires 4GB+ RAM, ~2x slower than base.en
+  # base.en: Faster but less accurate, works on 2GB RAM
   stt:
-    model: "base.en"
+    model: "small.en"
     device: "cpu"
     compute_type: "int8"  # Optimized for ARM
     beam_size: 1  # Speed priority

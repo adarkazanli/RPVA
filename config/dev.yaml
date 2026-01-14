@@ -16,6 +16,7 @@ ara:
 
   # STT with GPU acceleration if available
   stt:
+    model: "small.en"  # More accurate than base.en, ~2x slower
     device: "cpu"  # Use CPU on Mac (Metal not supported by faster-whisper)
     compute_type: "int8"  # Compatible with CPU
 
