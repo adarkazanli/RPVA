@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from .mode import ModeManager
 
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 from ..commands.reminder import (
     Reminder,
@@ -41,6 +42,34 @@ from ..feedback import FeedbackType
 from .intent import Intent, IntentClassifier, IntentType
 
 logger = logging.getLogger(__name__)
+
+# Interaction timing log file
+_INTERACTION_LOG_DIR = Path("logs")
+_INTERACTION_LOG_FILE = _INTERACTION_LOG_DIR / "interactions.txt"
+
+
+def _log_interaction_timing(event: str, transcript: str = "") -> None:
+    """Log interaction timing to text file.
+
+    Args:
+        event: Event type ('captured' or 'responded')
+        transcript: Optional transcript text for context
+    """
+    try:
+        _INTERACTION_LOG_DIR.mkdir(exist_ok=True)
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        if transcript:
+            # Truncate long transcripts
+            short_transcript = transcript[:50] + "..." if len(transcript) > 50 else transcript
+            line = f"{timestamp}: Voice agent {event} -> \"{short_transcript}\"\n"
+        else:
+            line = f"{timestamp}: Voice agent {event}\n"
+
+        with open(_INTERACTION_LOG_FILE, "a") as f:
+            f.write(line)
+    except Exception as e:
+        logger.debug(f"Failed to write interaction timing log: {e}")
 
 
 def _get_ordinal(n: int) -> str:
@@ -317,6 +346,9 @@ class Orchestrator:
             latencies["stt_ms"] = int((time.time() - stt_start) * 1000)
             logger.info(f"Transcribed: '{transcript}'")
 
+            # Log capture timing
+            _log_interaction_timing("captured", transcript)
+
             # Step 4: Classify intent
             intent = self._intent_classifier.classify(transcript)
             logger.info(f"Intent: {intent.type.value} (confidence: {intent.confidence:.2f})")
@@ -326,6 +358,9 @@ class Orchestrator:
             response_text = self._handle_intent(intent, interaction_id)
             latencies["llm_ms"] = int((time.time() - response_start) * 1000)
             logger.info(f"Response: '{response_text[:50]}...'")
+
+            # Log response timing
+            _log_interaction_timing("responded", response_text)
 
             # Step 6: Synthesize speech
             tts_start = time.time()
