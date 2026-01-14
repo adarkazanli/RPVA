@@ -586,6 +586,8 @@ class Orchestrator:
                 if 1 <= num <= len(pending):
                     reminder = pending[num - 1]
                     self._reminder_manager.cancel(reminder.id)
+                    # Signal countdown to stop if running
+                    self._countdown_active[reminder.id] = False
                     cancelled.append(reminder.message)
                 else:
                     invalid.append(num)
@@ -604,6 +606,8 @@ class Orchestrator:
             for reminder in pending:
                 if description.lower() in reminder.message.lower():
                     self._reminder_manager.cancel(reminder.id)
+                    # Signal countdown to stop if running
+                    self._countdown_active[reminder.id] = False
                     return f"Done! Cancelled: {reminder.message}."
             return "Couldn't find that reminder. Want me to list them?"
 
@@ -614,6 +618,8 @@ class Orchestrator:
         # Single reminder - cancel it
         reminder = pending[0]
         self._reminder_manager.cancel(reminder.id)
+        # Signal countdown to stop if running
+        self._countdown_active[reminder.id] = False
         return f"Done! Cancelled: {reminder.message}."
 
     def _extract_reminder_numbers(self, text: str) -> list[int]:
