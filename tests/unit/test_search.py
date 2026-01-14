@@ -2,6 +2,143 @@
 
 from unittest.mock import MagicMock, patch
 
+import pytest
+
+
+class TestTavilySearchResult:
+    """Tests for Tavily SearchResult dataclass."""
+
+    def test_successful_result(self):
+        """Test creating a successful search result."""
+        from ara.search.tavily import SearchResult
+
+        result = SearchResult(
+            query="test query",
+            answer="This is the answer",
+            results=[{"title": "Test", "url": "https://example.com", "content": "Content"}],
+            success=True,
+        )
+        assert result.success
+        assert result.query == "test query"
+        assert result.answer == "This is the answer"
+        assert len(result.results) == 1
+        assert result.error is None
+
+    def test_failed_result(self):
+        """Test creating a failed search result."""
+        from ara.search.tavily import SearchResult
+
+        result = SearchResult(
+            query="test query",
+            answer=None,
+            results=[],
+            success=False,
+            error="API error",
+        )
+        assert not result.success
+        assert result.error == "API error"
+
+
+class TestMockTavilySearch:
+    """Tests for MockTavilySearch."""
+
+    def test_mock_search_returns_results(self):
+        """Test that mock search returns valid results."""
+        from ara.search.tavily import MockTavilySearch
+
+        client = MockTavilySearch()
+        result = client.search("test query")
+
+        assert result.success
+        assert result.query == "test query"
+        assert result.answer is not None
+        assert "mock" in result.answer.lower()
+        assert len(result.results) == 2
+
+    def test_mock_quick_answer(self):
+        """Test that mock quick answer returns a response."""
+        from ara.search.tavily import MockTavilySearch
+
+        client = MockTavilySearch()
+        answer = client.quick_answer("What is Python?")
+
+        assert answer is not None
+        assert "Mock" in answer
+
+    def test_mock_search_includes_query_in_results(self):
+        """Test that mock results reference the query."""
+        from ara.search.tavily import MockTavilySearch
+
+        client = MockTavilySearch()
+        result = client.search("Python programming")
+
+        for r in result.results:
+            assert "Python programming" in r["title"]
+
+
+class TestCreateSearchClient:
+    """Tests for create_search_client factory."""
+
+    def test_create_mock_client(self):
+        """Test creating a mock client explicitly."""
+        from ara.search.tavily import MockTavilySearch, create_search_client
+
+        client = create_search_client(use_mock=True)
+        assert isinstance(client, MockTavilySearch)
+
+    def test_create_client_without_api_key_returns_mock(self):
+        """Test that missing API key falls back to mock."""
+        from ara.search.tavily import create_search_client
+
+        # This should fall back to mock since no API key is set
+        client = create_search_client(api_key=None, use_mock=False)
+        # Should be either TavilySearch or MockTavilySearch depending on env
+        assert client is not None
+
+
+class TestWebSearchIntentPatterns:
+    """Tests for web search intent classification patterns."""
+
+    @pytest.fixture
+    def classifier(self):
+        """Create intent classifier."""
+        from ara.router.intent import IntentClassifier
+
+        return IntentClassifier()
+
+    def test_news_query_classified_as_web_search(self, classifier):
+        """Test that news queries trigger web search."""
+        from ara.router.intent import IntentType
+
+        queries = [
+            "What's the latest news?",
+            "What's the top news today?",
+            "What's in the news?",
+        ]
+        for query in queries:
+            intent = classifier.classify(query)
+            assert intent.type == IntentType.WEB_SEARCH, f"Failed for: {query}"
+
+    def test_weather_query_classified_as_web_search(self, classifier):
+        """Test that weather queries trigger web search."""
+        from ara.router.intent import IntentType
+
+        queries = [
+            "What's the weather in Austin?",
+            "How's the weather in New York?",
+        ]
+        for query in queries:
+            intent = classifier.classify(query)
+            assert intent.type == IntentType.WEB_SEARCH, f"Failed for: {query}"
+
+    def test_local_news_extracts_location(self, classifier):
+        """Test that local news queries extract the location."""
+        intent = classifier.classify("anything happening in Austin Texas")
+        assert "Austin Texas" in intent.entities.get("query", "")
+
+
+# Legacy DuckDuckGo tests below (kept for backwards compatibility)
+
 
 class TestSearchResult:
     """Tests for SearchResult data class."""

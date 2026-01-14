@@ -121,7 +121,21 @@ class IntentClassifier:
         r"with\s+internet[,\s]+(.+)",
         r"using\s+internet[,\s]+(.+)",
         r"google\s+(.+)",
-        r"find\s+(?:information\s+(?:about|on)\s+)?(.+)",
+        # News patterns - capture full query for context
+        r"(?:what(?:'s|'s|\s+is)\s+)?(?:the\s+)?(?:latest|top|recent|current|breaking)\s+(?:news|headlines?)(?:\s+(?:about|on|in|from)\s+(.+))?",
+        r"(?:what(?:'s|'s|\s+is)\s+)?(?:in\s+)?(?:the\s+)?news(?:\s+(?:today|right\s+now))?(?:\s+(?:about|on|in|from)\s+(.+))?",
+        r"(?:any(?:thing)?|what(?:'s|'s|\s+is))\s+happening\s+(?:in\s+)?(.+)",
+        r"news\s+(?:about|on|in|from)\s+(.+)",
+        # Weather patterns
+        r"(?:what(?:'s|'s|\s+is)\s+)?(?:the\s+)?weather\s+(?:like\s+)?(?:in|at|for)\s+(.+)",
+        r"(?:what(?:'s|'s|\s+is)\s+)?(?:the\s+)?(?:current\s+)?(?:weather|temperature|forecast)\s+(?:in|at|for)\s+(.+)",
+        r"(?:how(?:'s|'s|\s+is)\s+)?(?:the\s+)?weather\s+(?:in|at|for)?\s*(.+)",
+        # Sports patterns
+        r"(?:what(?:'s|'s|\s+is)\s+)?(?:the\s+)?(?:latest|recent)\s+(?:sports?|scores?)\s+(?:news)?(?:\s+(?:about|on|for)\s+(.+))?",
+        r"(?:who\s+won|score\s+of)\s+(?:the\s+)?(.+)\s+game",
+        # Stock/finance patterns
+        r"(?:what(?:'s|'s|\s+is)\s+)?(?:the\s+)?(?:stock\s+)?price\s+(?:of|for)\s+(.+)",
+        r"(?:how(?:'s|'s|\s+is)\s+)?(.+)\s+(?:stock|trading)",
     ]
 
     # System command patterns
@@ -444,6 +458,10 @@ class IntentClassifier:
                 groups = match.groups()
                 if groups and groups[0]:
                     entities["query"] = groups[0].strip()
+                else:
+                    # For patterns without capture groups (like "what's the news"),
+                    # use the full text as the query
+                    entities["query"] = text.strip()
 
                 return Intent(
                     type=IntentType.WEB_SEARCH,
