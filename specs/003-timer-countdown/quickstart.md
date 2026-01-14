@@ -30,10 +30,9 @@ Or set via voice command after implementation:
 
 ### 2. Verify Existing Setup
 
-Ensure the reminder system works:
+Ensure the reminder system works (from the repository root):
 
 ```bash
-cd /Users/adarkazanli/Projects/mpsinc/11-RPVA
 python -m pytest tests/ -k reminder -v
 ```
 
