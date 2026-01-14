@@ -33,7 +33,7 @@ from ..commands.reminder import (
     parse_reminder_time,
 )
 from ..commands.system import SystemCommandHandler
-from ..commands.timer import TimerManager, parse_duration
+from ..commands.timer import Timer, TimerManager, parse_duration
 from ..config.loader import get_reminders_path
 from ..config.personality import get_default_personality
 from ..config.user_profile import load_user_profile
@@ -274,6 +274,16 @@ class Orchestrator:
         start_time = time.time()
         interaction_id = uuid.uuid4()
 
+        # Ensure required components are available
+        if (
+            not self._feedback
+            or not self._transcriber
+            or not self._synthesizer
+            or not self._playback
+        ):
+            logger.error("Missing required components for interaction")
+            return None
+
         try:
             # Step 1: Wait for wake word
             logger.debug("Listening for wake word...")
@@ -410,6 +420,8 @@ class Orchestrator:
             return self._handle_user_name_set(intent)
         else:
             # Default to LLM for general questions
+            if self._llm is None:
+                return "I'm not able to process that request right now."
             llm_response = self._llm.generate(intent.raw_text)
             return llm_response.text.strip()
 
@@ -694,6 +706,8 @@ class Orchestrator:
             end = datetime.now(UTC)
         else:
             # Recent - last 10 interactions
+            if not self._interaction_logger or not self._interaction_logger.storage:
+                return "I don't have conversation history available."
             interactions = self._interaction_logger.storage.get_recent(limit=10)
             if not interactions:
                 return "I don't have any recent conversation history."
@@ -705,7 +719,10 @@ class Orchestrator:
             return " ".join(lines)
 
         # Query by date range
-        interactions = self._interaction_logger.storage.sqlite.get_by_date_range(start, end)
+        if not self._interaction_logger or not self._interaction_logger.storage:
+            return "I don't have conversation history available."
+        storage = self._interaction_logger.storage
+        interactions = storage.get_by_date_range(start, end)  # type: ignore[attr-defined]
 
         if not interactions:
             if time_ref == "yesterday":
@@ -742,10 +759,14 @@ class Orchestrator:
             if not results:
                 # Fall back to local LLM if search fails
                 logger.warning("Web search returned no results, falling back to local LLM")
+                if self._llm is None:
+                    return "I couldn't find any results for that search."
                 llm_response = self._llm.generate(intent.raw_text)
                 return llm_response.text.strip()
 
             # Summarize results using LLM
+            if self._llm is None:
+                return "Search results found but unable to summarize."
             summarizer = SearchSummarizer(llm=self._llm)
             summary = summarizer.summarize(query, results)
 
@@ -754,12 +775,16 @@ class Orchestrator:
         except ImportError:
             # duckduckgo_search not installed
             logger.warning("Web search not available, falling back to local LLM")
+            if self._llm is None:
+                return "Web search is not available right now."
             llm_response = self._llm.generate(intent.raw_text)
             return llm_response.text.strip()
 
         except Exception as e:
             # Any other error, graceful degradation to local LLM
             logger.error(f"Web search failed: {e}, falling back to local LLM")
+            if self._llm is None:
+                return "I encountered an error while searching."
             llm_response = self._llm.generate(intent.raw_text)
             return llm_response.text.strip()
 
@@ -809,10 +834,11 @@ class Orchestrator:
         logger.info(f"User name set to: {name}")
         return f"Got it, {name}! I'll use your name from now on."
 
-    def _on_timer_expire(self, timer: "TimerManager") -> None:
+    def _on_timer_expire(self, timer: "Timer") -> None:
         """Callback when a timer expires."""
         logger.info(f"Timer expired: {timer.name or 'unnamed'}")
-        self._feedback.play(FeedbackType.TIMER_ALERT)
+        if self._feedback:
+            self._feedback.play(FeedbackType.TIMER_ALERT)
 
         # Optionally announce the timer
         if timer.name:
@@ -820,13 +846,14 @@ class Orchestrator:
         else:
             message = "Your timer has finished."
 
-        try:
-            synthesis_result = self._synthesizer.synthesize(message)
-            self._playback.play(synthesis_result.audio, synthesis_result.sample_rate)
-        except Exception as e:
-            logger.error(f"Failed to announce timer: {e}")
+        if self._synthesizer and self._playback:
+            try:
+                synthesis_result = self._synthesizer.synthesize(message)
+                self._playback.play(synthesis_result.audio, synthesis_result.sample_rate)
+            except Exception as e:
+                logger.error(f"Failed to announce timer: {e}")
 
-    def _on_reminder_trigger(self, reminder: "ReminderManager") -> None:
+    def _on_reminder_trigger(self, reminder: "Reminder") -> None:
         """Callback when a reminder triggers."""
         # Skip if this reminder was already handled by countdown
         if reminder.id in self._countdown_active:
@@ -835,16 +862,18 @@ class Orchestrator:
             return
 
         logger.info(f"Reminder triggered: {reminder.message}")
-        self._feedback.play(FeedbackType.REMINDER_ALERT)
+        if self._feedback:
+            self._feedback.play(FeedbackType.REMINDER_ALERT)
 
         # Announce the reminder
         message = f"Reminder: {reminder.message}"
 
-        try:
-            synthesis_result = self._synthesizer.synthesize(message)
-            self._playback.play(synthesis_result.audio, synthesis_result.sample_rate)
-        except Exception as e:
-            logger.error(f"Failed to announce reminder: {e}")
+        if self._synthesizer and self._playback:
+            try:
+                synthesis_result = self._synthesizer.synthesize(message)
+                self._playback.play(synthesis_result.audio, synthesis_result.sample_rate)
+            except Exception as e:
+                logger.error(f"Failed to announce reminder: {e}")
 
     def _get_countdown_start(self, remaining_seconds: float) -> int:
         """Get the starting number for countdown based on remaining time.
@@ -988,6 +1017,9 @@ class Orchestrator:
         Returns:
             True if wake word detected
         """
+        if not self._capture or not self._wake_word:
+            return False
+
         self._capture.start()
 
         try:
@@ -1011,6 +1043,9 @@ class Orchestrator:
         Returns:
             Recorded audio bytes
         """
+        if not self._capture:
+            return b""
+
         audio_buffer = b""
         silence_start: float | None = None
         recording_start = time.time()
@@ -1062,7 +1097,7 @@ class Orchestrator:
         sum_squares = sum(s * s for s in samples)
         rms = (sum_squares / num_samples) ** 0.5
 
-        return rms
+        return float(rms)
 
     def start(self) -> None:
         """Start the voice loop in a background thread."""

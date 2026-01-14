@@ -166,7 +166,7 @@ class PiperSynthesizer:
         indices = np.linspace(0, len(audio_array) - 1, new_length).astype(int)
         resampled = audio_array[indices]
 
-        return resampled.tobytes()
+        return bytes(resampled.tobytes())
 
     def set_voice(self, voice_id: str) -> None:
         """Set voice and reload model."""

@@ -164,6 +164,9 @@ module = [
     "piper.*",
     "ollama.*",
     "duckduckgo_search.*",
+    "torch.*",
+    "anthropic.*",
+    "ddgs.*",
 ]
 ignore_missing_imports = true
 

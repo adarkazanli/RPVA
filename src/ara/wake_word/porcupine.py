@@ -28,7 +28,7 @@ try:
     PORCUPINE_AVAILABLE = True
 except ImportError:
     PORCUPINE_AVAILABLE = False
-    pvporcupine = None  # type: ignore
+    pvporcupine = None
 
 logger = logging.getLogger(__name__)
 

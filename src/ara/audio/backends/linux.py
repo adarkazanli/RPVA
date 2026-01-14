@@ -21,7 +21,7 @@ try:
     PYAUDIO_AVAILABLE = True
 except ImportError:
     PYAUDIO_AVAILABLE = False
-    pyaudio = None  # type: ignore
+    pyaudio = None
 
 
 class LinuxAudioCapture:

@@ -245,9 +245,12 @@ class SummaryGenerator:
         for i in interactions:
             intent_counts[i.intent] = intent_counts.get(i.intent, 0) + 1
 
+        intent_list: list[dict[str, str | int]] = [
+            {"intent": k, "count": v} for k, v in intent_counts.items()
+        ]
         top_intents = sorted(
-            [{"intent": k, "count": v} for k, v in intent_counts.items()],
-            key=lambda x: x["count"],
+            intent_list,
+            key=lambda x: x["count"] if isinstance(x["count"], int) else 0,
             reverse=True,
         )[:10]
 

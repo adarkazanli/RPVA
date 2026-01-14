@@ -18,7 +18,7 @@ try:
     FASTER_WHISPER_AVAILABLE = True
 except ImportError:
     FASTER_WHISPER_AVAILABLE = False
-    WhisperModel = None  # type: ignore
+    WhisperModel = None
 
 logger = logging.getLogger(__name__)
 

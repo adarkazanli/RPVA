@@ -255,7 +255,7 @@ class SQLiteStorage:
             """,
             (start.isoformat(), end.isoformat()),
         )
-        return cursor.fetchone()[0]
+        return int(cursor.fetchone()[0])
 
     def get_intent_counts(self, target_date: date) -> dict[str, int]:
         """Get intent counts for a specific date.
@@ -310,12 +310,12 @@ class SQLiteStorage:
         if not latencies:
             return 0.0
 
-        return sum(latencies) / len(latencies)
+        return float(sum(latencies)) / len(latencies)
 
     def is_wal_mode_enabled(self) -> bool:
         """Check if WAL mode is enabled."""
         cursor = self._conn.execute("PRAGMA journal_mode")
-        return cursor.fetchone()[0].lower() == "wal"
+        return str(cursor.fetchone()[0]).lower() == "wal"
 
     def _row_to_interaction(self, row: sqlite3.Row) -> Interaction:
         """Convert a database row to an Interaction."""

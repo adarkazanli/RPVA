@@ -108,12 +108,12 @@ def detect_accelerator() -> Accelerator:
     try:
         import subprocess
 
-        result = subprocess.run(
+        nvidia_result = subprocess.run(
             ["nvidia-smi"],
             capture_output=True,
             timeout=5,
         )
-        if result.returncode == 0:
+        if nvidia_result.returncode == 0:
             return Accelerator.CUDA
     except (subprocess.SubprocessError, FileNotFoundError):
         pass
