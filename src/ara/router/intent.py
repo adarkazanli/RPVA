@@ -89,8 +89,10 @@ class IntentClassifier:
         r"what\s+have\s+I\s+(?:asked|said)\s+(?:recently|today)",
     ]
 
-    # Web search patterns
+    # Web search patterns (more specific patterns first)
     WEB_SEARCH_PATTERNS = [
+        r"search\s+(?:the\s+)?internet\s+(?:for\s+)?(.+)",
+        r"search\s+(?:the\s+)?web\s+(?:for\s+)?(.+)",
         r"search\s+(?:for\s+)?(.+)",
         r"look\s+up\s+(.+)",
         r"with\s+internet[,\s]+(.+)",
