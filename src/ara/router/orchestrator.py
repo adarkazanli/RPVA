@@ -33,7 +33,7 @@ from ..commands.reminder import (
     parse_reminder_time,
 )
 from ..commands.system import SystemCommandHandler
-from ..commands.timer import Timer, TimerManager, parse_duration
+from ..commands.timer import Timer, TimerManager, TimerStatus, parse_duration
 from ..config.loader import get_reminders_path
 from ..config.personality import get_default_personality
 from ..config.user_profile import load_user_profile
@@ -1168,6 +1168,11 @@ class Orchestrator:
                 # Play the timer alert
                 if self._feedback:
                     self._feedback.play(FeedbackType.TIMER_ALERT)
+
+                # Mark timers as completed so check_expired doesn't announce again
+                for timer in timers:
+                    timer.status = TimerStatus.COMPLETED
+                    timer.alert_played = True
 
         finally:
             self._countdown_in_progress = False
