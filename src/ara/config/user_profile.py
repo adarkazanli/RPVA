@@ -8,9 +8,18 @@ import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .loader import get_user_profile_path
-
 logger = logging.getLogger(__name__)
+
+
+def _get_user_profile_path() -> Path:
+    """Get the path to the user profile file.
+
+    Returns:
+        Path to ~/.ara/user_profile.json
+    """
+    ara_dir = Path.home() / ".ara"
+    ara_dir.mkdir(parents=True, exist_ok=True)
+    return ara_dir / "user_profile.json"
 
 
 @dataclass
@@ -38,7 +47,7 @@ def load_user_profile(path: Path | None = None) -> UserProfile:
         UserProfile with loaded data or defaults if file doesn't exist.
     """
     if path is None:
-        path = get_user_profile_path()
+        path = _get_user_profile_path()
 
     if not path.exists():
         logger.debug(f"User profile not found at {path}, using defaults")
@@ -80,7 +89,7 @@ def save_user_profile(profile: UserProfile, path: Path | None = None) -> bool:
         True if saved successfully, False otherwise.
     """
     if path is None:
-        path = get_user_profile_path()
+        path = _get_user_profile_path()
 
     try:
         # Ensure parent directory exists
