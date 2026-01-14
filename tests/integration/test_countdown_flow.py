@@ -1,10 +1,8 @@
 """Integration tests for countdown announcement flow (T037-T039)."""
 
-import tempfile
 import uuid
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -382,7 +380,7 @@ class TestEndToEndCountdown:
     def test_set_reminder_and_countdown(self, orchestrator: Orchestrator) -> None:
         """Test setting a reminder and verifying countdown setup."""
         # Create a reminder directly (process() depends on full pipeline)
-        reminder = orchestrator._reminder_manager.create(
+        orchestrator._reminder_manager.create(
             message="call mom",
             remind_at=datetime.now(UTC) + timedelta(seconds=10),
             interaction_id=uuid.uuid4(),

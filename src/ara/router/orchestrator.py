@@ -23,9 +23,7 @@ if TYPE_CHECKING:
     from ..wake_word.detector import WakeWordDetector
     from .mode import ModeManager
 
-from datetime import UTC, datetime
-
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 
 from ..commands.reminder import (
     Reminder,
@@ -36,7 +34,7 @@ from ..commands.reminder import (
 )
 from ..commands.system import SystemCommandHandler
 from ..commands.timer import TimerManager, parse_duration
-from ..config.loader import get_reminders_path, get_user_profile_path
+from ..config.loader import get_reminders_path
 from ..config.personality import get_default_personality
 from ..config.user_profile import load_user_profile
 from ..feedback import FeedbackType
