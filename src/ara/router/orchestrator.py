@@ -479,6 +479,8 @@ class Orchestrator:
             return self._handle_reminder_query()
         elif intent.type == IntentType.REMINDER_CLEAR_ALL:
             return self._handle_reminder_clear_all()
+        elif intent.type == IntentType.REMINDER_TIME_LEFT:
+            return self._handle_reminder_time_left(intent)
         elif intent.type == IntentType.HISTORY_QUERY:
             return self._handle_history_query(intent)
         elif intent.type == IntentType.WEB_SEARCH:
@@ -746,6 +748,64 @@ class Orchestrator:
 
         return f"Done! Cleared {count} reminders."
 
+    def _handle_reminder_time_left(self, intent: Intent) -> str:
+        """Handle reminder time remaining query.
+
+        Args:
+            intent: Classified reminder time left intent.
+
+        Returns:
+            Response with time remaining until next reminder.
+        """
+        pending = self._reminder_manager.list_pending()
+
+        if not pending:
+            return "You have no active reminders."
+
+        search_term = intent.entities.get("search", "")
+        now = datetime.now(UTC)
+
+        # If search term provided, find matching reminder
+        if search_term:
+            search_lower = search_term.lower()
+            for reminder in pending:
+                if search_lower in reminder.message.lower():
+                    time_diff = reminder.remind_at - now
+                    minutes = int(time_diff.total_seconds() / 60)
+                    if minutes < 1:
+                        return f"Your reminder to {reminder.message} is coming up any moment!"
+                    elif minutes == 1:
+                        return f"About 1 minute until your reminder to {reminder.message}."
+                    elif minutes < 60:
+                        return f"About {minutes} minutes until your reminder to {reminder.message}."
+                    else:
+                        hours = minutes // 60
+                        mins = minutes % 60
+                        if mins > 0:
+                            return f"About {hours} hour{'s' if hours > 1 else ''} and {mins} minutes until your reminder to {reminder.message}."
+                        return f"About {hours} hour{'s' if hours > 1 else ''} until your reminder to {reminder.message}."
+
+        # No search term or no match - show next reminder
+        next_reminder = pending[0]  # Already sorted by time
+        time_diff = next_reminder.remind_at - now
+        minutes = int(time_diff.total_seconds() / 60)
+        time_str = format_time_local(next_reminder.remind_at)
+
+        if minutes < 1:
+            return f"Your next reminder is coming up any moment - to {next_reminder.message}!"
+        elif minutes == 1:
+            return (
+                f"About 1 minute until your next reminder at {time_str} to {next_reminder.message}."
+            )
+        elif minutes < 60:
+            return f"About {minutes} minutes until your next reminder at {time_str} to {next_reminder.message}."
+        else:
+            hours = minutes // 60
+            mins = minutes % 60
+            if mins > 0:
+                return f"About {hours} hour{'s' if hours > 1 else ''} and {mins} minutes until your next reminder to {next_reminder.message}."
+            return f"About {hours} hour{'s' if hours > 1 else ''} until your next reminder to {next_reminder.message}."
+
     def _check_missed_reminders(self) -> None:
         """Check for reminders that were missed during system downtime.
 
@@ -824,10 +884,56 @@ class Orchestrator:
         if not entries:
             return "I don't have any conversation history yet."
 
+        # Helper function for fuzzy word matching
+        def fuzzy_match(search_text: str, content_text: str) -> bool:
+            """Check if search terms match content using word-based fuzzy matching."""
+            # Extract meaningful words (skip common words)
+            skip_words = {
+                "the",
+                "a",
+                "an",
+                "in",
+                "on",
+                "at",
+                "to",
+                "for",
+                "of",
+                "and",
+                "or",
+                "is",
+                "it",
+                "that",
+                "this",
+                "about",
+                "did",
+                "i",
+                "you",
+                "my",
+                "me",
+                "ask",
+                "asked",
+                "say",
+                "said",
+                "mention",
+                "mentioned",
+                "when",
+                "how",
+            }
+            search_words = [
+                w for w in search_text.lower().split() if w not in skip_words and len(w) > 2
+            ]
+            content_lower = content_text.lower()
+
+            if not search_words:
+                return False
+
+            # Check if most meaningful words are present
+            matches = sum(1 for w in search_words if w in content_lower)
+            return matches >= len(search_words) * 0.5  # At least 50% of words match
+
         # Handle different query types
         if query_type == "time_since" and search_content:
             # Search for content and calculate time since
-            search_lower = search_content.lower()
             now = datetime.now()
 
             for entry in reversed(entries):  # Search from most recent
@@ -835,7 +941,7 @@ class Orchestrator:
                 entry_timestamp = entry["timestamp"]
                 if not isinstance(entry_timestamp, datetime):
                     continue
-                if search_lower in entry_content.lower():
+                if fuzzy_match(search_content, entry_content):
                     time_diff = now - entry_timestamp
                     minutes = int(time_diff.total_seconds() / 60)
 
@@ -856,13 +962,12 @@ class Orchestrator:
 
         elif query_type == "content_check" and search_content:
             # Check if user mentioned something
-            search_lower = search_content.lower()
             for entry in reversed(entries):
                 entry_content = str(entry["content"])
                 entry_timestamp = entry["timestamp"]
                 if not isinstance(entry_timestamp, datetime):
                     continue
-                if search_lower in entry_content.lower():
+                if fuzzy_match(search_content, entry_content):
                     time_diff = datetime.now() - entry_timestamp
                     minutes = int(time_diff.total_seconds() / 60)
                     time_str = f"{minutes} minutes ago" if minutes > 1 else "just now"

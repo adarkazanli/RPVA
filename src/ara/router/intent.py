@@ -22,6 +22,7 @@ class IntentType(Enum):
     REMINDER_CANCEL = "reminder_cancel"
     REMINDER_QUERY = "reminder_query"
     REMINDER_CLEAR_ALL = "reminder_clear_all"
+    REMINDER_TIME_LEFT = "reminder_time_left"
     HISTORY_QUERY = "history_query"
     WEB_SEARCH = "web_search"
     SYSTEM_COMMAND = "system_command"
@@ -105,6 +106,16 @@ class IntentClassifier:
         r"(?:clear|delete|remove|cancel)\s+(?:my\s+)?reminders?\s+all",
     ]
 
+    # Reminder time remaining patterns - "how much time until my reminder"
+    # Also catches timer-style queries about reminders
+    REMINDER_TIME_LEFT_PATTERNS = [
+        r"how\s+much\s+time\s+(?:is\s+)?(?:left\s+)?(?:until|till|before)\s+(?:my\s+)?(?:reminder|I\s+(?:need\s+to|have\s+to|should))\s*(.+)?",
+        r"how\s+(?:much\s+)?(?:longer|long)\s+(?:until|till|before)\s+(?:my\s+)?(?:reminder|I\s+(?:need\s+to|have\s+to|should))\s*(.+)?",
+        r"(?:when\s+is|what\s+time\s+is)\s+my\s+(?:next\s+)?reminder",
+        r"how\s+much\s+time\s+(?:is\s+)?left\s+(?:on|for)\s+(?:my\s+)?(?:leaving|reminder|.+ing)",
+        r"time\s+(?:left|remaining)\s+(?:on|for|until)\s+(?:my\s+)?(?:reminder|leaving)",
+    ]
+
     # History query patterns
     HISTORY_QUERY_PATTERNS = [
         r"what\s+did\s+I\s+(?:ask|say)\s+(?:you\s+)?yesterday",
@@ -119,6 +130,12 @@ class IntentClassifier:
         # Content-based history queries
         r"did\s+I\s+(?:say|ask|mention)\s+(?:anything\s+)?(?:about\s+)?(.+)",
         r"have\s+I\s+(?:said|asked|mentioned)\s+(.+)",
+        # "Do you have history" queries
+        r"do\s+you\s+(?:have|keep|retain|store)\s+(?:a\s+)?(?:history|record|log)",
+        r"(?:is\s+there|have\s+you\s+got)\s+(?:a\s+)?(?:history|record|log)",
+        # "How long have I been" queries (waiting, doing something)
+        r"how\s+long\s+have\s+I\s+been\s+(?:waiting|doing|here|gone)(?:\s+(?:for|to)\s+)?(.+)?",
+        r"how\s+long\s+(?:has\s+it\s+been|is\s+it)\s+since\s+(?:I\s+)?(.+)",
     ]
 
     # Web search patterns (more specific patterns first)
@@ -276,6 +293,9 @@ class IntentClassifier:
         self._reminder_clear_all = [
             re.compile(p, re.IGNORECASE) for p in self.REMINDER_CLEAR_ALL_PATTERNS
         ]
+        self._reminder_time_left = [
+            re.compile(p, re.IGNORECASE) for p in self.REMINDER_TIME_LEFT_PATTERNS
+        ]
         self._history_query = [re.compile(p, re.IGNORECASE) for p in self.HISTORY_QUERY_PATTERNS]
         self._web_search = [re.compile(p, re.IGNORECASE) for p in self.WEB_SEARCH_PATTERNS]
         self._system = [(re.compile(p, re.IGNORECASE), cmd) for p, cmd in self.SYSTEM_PATTERNS]
@@ -323,6 +343,8 @@ class IntentClassifier:
         if intent := self._try_reminder_clear_all(text):
             return intent
         if intent := self._try_reminder_cancel(text):
+            return intent
+        if intent := self._try_reminder_time_left(text):
             return intent
         if intent := self._try_reminder_query(text):
             return intent
@@ -490,6 +512,24 @@ class IntentClassifier:
                 )
         return None
 
+    def _try_reminder_time_left(self, text: str) -> Intent | None:
+        """Try to match reminder time remaining patterns."""
+        for pattern in self._reminder_time_left:
+            match = pattern.search(text)
+            if match:
+                entities = {}
+                # Extract search term if present
+                groups = match.groups()
+                if groups and groups[0]:
+                    entities["search"] = groups[0].strip()
+                return Intent(
+                    type=IntentType.REMINDER_TIME_LEFT,
+                    confidence=0.85,
+                    entities=entities,
+                    raw_text=text,
+                )
+        return None
+
     def _try_history_query(self, text: str) -> Intent | None:
         """Try to match history query patterns."""
         for pattern in self._history_query:
@@ -504,10 +544,12 @@ class IntentClassifier:
 
                 # Determine query type
                 text_lower = text.lower()
-                if "how long" in text_lower or "when did" in text_lower:
+                if "how long" in text_lower or "when did" in text_lower or "since" in text_lower:
                     entities["query_type"] = "time_since"
                 elif "did i" in text_lower or "have i" in text_lower:
                     entities["query_type"] = "content_check"
+                elif "do you have" in text_lower or "is there" in text_lower:
+                    entities["query_type"] = "list"
                 else:
                     entities["query_type"] = "list"
 
