@@ -214,7 +214,8 @@ class Orchestrator:
         self._missed_reminders: list = []
         self._check_missed_reminders()
 
-        # Countdown announcement tracking
+        # Countdown announcement tracking (protected by _countdown_lock)
+        self._countdown_lock = threading.Lock()
         self._countdown_active: dict[uuid.UUID, bool] = {}
         self._countdown_in_progress = False
         self._countdown_interval = 1.0  # 1 second between numbers
@@ -1082,12 +1083,7 @@ class Orchestrator:
         if not reminders or not self._synthesizer or not self._playback:
             return
 
-        if self._countdown_in_progress:
-            logger.debug("Countdown already in progress, skipping")
-            return
-
-        self._countdown_in_progress = True
-
+        # Note: _countdown_in_progress is already set by the caller with the lock
         # Note: reminders are already marked in _countdown_active by the caller
         # to prevent race conditions with check_due()
 
@@ -1148,11 +1144,13 @@ class Orchestrator:
                 self._reminder_manager._save()
 
         finally:
-            self._countdown_in_progress = False
-            # Clean up tracking entries now that countdown is complete
-            for reminder in reminders:
-                if reminder.id in self._countdown_active:
-                    del self._countdown_active[reminder.id]
+            # Use lock when resetting state
+            with self._countdown_lock:
+                self._countdown_in_progress = False
+                # Clean up tracking entries now that countdown is complete
+                for reminder in reminders:
+                    if reminder.id in self._countdown_active:
+                        del self._countdown_active[reminder.id]
 
     def _generate_timer_countdown_phrase(self, timers: list[Timer], user_name: str | None) -> str:
         """Generate the countdown announcement phrase for timers.
@@ -1184,12 +1182,7 @@ class Orchestrator:
         if not timers or not self._synthesizer or not self._playback:
             return
 
-        if self._countdown_in_progress:
-            logger.debug("Countdown already in progress, skipping")
-            return
-
-        self._countdown_in_progress = True
-
+        # Note: _countdown_in_progress is already set by the caller with the lock
         # Note: timers are already marked in _countdown_active by the caller
         # to prevent race conditions with check_expired()
 
@@ -1254,11 +1247,13 @@ class Orchestrator:
                     timer.alert_played = True
 
         finally:
-            self._countdown_in_progress = False
-            # Clean up tracking entries now that countdown is complete
-            for timer in timers:
-                if timer.id in self._countdown_active:
-                    del self._countdown_active[timer.id]
+            # Use lock when resetting state
+            with self._countdown_lock:
+                self._countdown_in_progress = False
+                # Clean up tracking entries now that countdown is complete
+                for timer in timers:
+                    if timer.id in self._countdown_active:
+                        del self._countdown_active[timer.id]
 
     def _wait_for_wake_word(self) -> bool:
         """Wait for wake word detection.
@@ -1410,39 +1405,45 @@ class Orchestrator:
         while self._running:
             try:
                 # Check for upcoming timers that need countdown (5-second window)
-                if not self._countdown_in_progress:
-                    upcoming_timers = self._get_upcoming_timers(5)
-                    if upcoming_timers:
-                        # Mark as being counted down BEFORE starting thread
-                        # to prevent race condition with check_expired()
-                        for timer in upcoming_timers:
-                            self._countdown_active[timer.id] = True
-                        # Start countdown in a separate thread to not block
-                        countdown_thread = threading.Thread(
-                            target=self._start_timer_countdown,
-                            args=(upcoming_timers,),
-                            daemon=True,
-                        )
-                        countdown_thread.start()
+                # Use lock to make check-and-set atomic
+                with self._countdown_lock:
+                    if not self._countdown_in_progress:
+                        upcoming_timers = self._get_upcoming_timers(5)
+                        if upcoming_timers:
+                            # Mark as being counted down BEFORE starting thread
+                            # to prevent race condition with check_expired()
+                            for timer in upcoming_timers:
+                                self._countdown_active[timer.id] = True
+                            self._countdown_in_progress = True
+                            # Start countdown in a separate thread to not block
+                            countdown_thread = threading.Thread(
+                                target=self._start_timer_countdown,
+                                args=(upcoming_timers,),
+                                daemon=True,
+                            )
+                            countdown_thread.start()
 
                 # Check for expired timers (for any not handled by countdown)
                 self._timer_manager.check_expired()
 
                 # Check for upcoming reminders that need countdown (5-second window)
-                if not self._countdown_in_progress:
-                    upcoming_reminders = self._get_upcoming_reminders(5)
-                    if upcoming_reminders:
-                        # Mark as being counted down BEFORE starting thread
-                        # to prevent race condition with check_due()
-                        for reminder in upcoming_reminders:
-                            self._countdown_active[reminder.id] = True
-                        # Start countdown in a separate thread to not block
-                        countdown_thread = threading.Thread(
-                            target=self._start_countdown,
-                            args=(upcoming_reminders,),
-                            daemon=True,
-                        )
-                        countdown_thread.start()
+                # Use lock to make check-and-set atomic
+                with self._countdown_lock:
+                    if not self._countdown_in_progress:
+                        upcoming_reminders = self._get_upcoming_reminders(5)
+                        if upcoming_reminders:
+                            # Mark as being counted down BEFORE starting thread
+                            # to prevent race condition with check_due()
+                            for reminder in upcoming_reminders:
+                                self._countdown_active[reminder.id] = True
+                            self._countdown_in_progress = True
+                            # Start countdown in a separate thread to not block
+                            countdown_thread = threading.Thread(
+                                target=self._start_countdown,
+                                args=(upcoming_reminders,),
+                                daemon=True,
+                            )
+                            countdown_thread.start()
 
                 # Check for due reminders
                 self._reminder_manager.check_due()
