@@ -28,6 +28,10 @@ class IntentType(Enum):
     SYSTEM_COMMAND = "system_command"
     USER_NAME_SET = "user_name_set"
     USER_PASSWORD_SET = "user_password_set"
+    # MongoDB time-based query intents
+    DURATION_QUERY = "duration_query"  # "how long was I in the shower?"
+    ACTIVITY_SEARCH = "activity_search"  # "what was I doing around 10 AM?"
+    EVENT_LOG = "event_log"  # "I'm going to the gym" (activity start/end)
     UNKNOWN = "unknown"
 
 
@@ -144,6 +148,9 @@ class IntentClassifier:
         r"search\s+(?:the\s+)?web\s+(?:for\s+)?(.+)",
         r"search\s+(?:for\s+)?(.+)",
         r"look\s+up\s+(.+)",
+        r"check\s+(?:the\s+)?internet\s+(?:to\s+)?(?:see\s+)?(?:for\s+)?(.+)",
+        r"check\s+online\s+(?:for\s+)?(.+)",
+        r"find\s+out\s+(?:online\s+)?(.+)",
         r"with\s+internet[,\s]+(.+)",
         r"using\s+internet[,\s]+(.+)",
         r"google\s+(.+)",
@@ -162,6 +169,13 @@ class IntentClassifier:
         # Stock/finance patterns
         r"(?:what(?:'s|'s|\s+is)\s+)?(?:the\s+)?(?:stock\s+)?price\s+(?:of|for)\s+(.+)",
         r"(?:how(?:'s|'s|\s+is)\s+)?(.+)\s+(?:stock|trading)",
+        # Distance/direction patterns
+        r"(?:what(?:'s|'s|\s+is)\s+)?(?:the\s+)?distance\s+(?:between|from)\s+(.+)",
+        r"how\s+far\s+(?:is\s+it\s+)?(?:from\s+)?(.+?)(?:\s+to\s+.+)?",
+        r"how\s+(?:long|far)\s+(?:does\s+it\s+take|is\s+it)\s+(?:to\s+)?(?:drive|get|travel)\s+(?:from\s+)?(.+)",
+        r"(?:how\s+)?(?:do\s+I\s+)?(?:get|drive)\s+to\s+(.+?)(?:\s+from\s+.+)?",
+        r"directions?\s+(?:to|from)\s+(.+)",
+        r"drive\s+(?:from\s+)?(.+?)\s+to\s+(.+)",
     ]
 
     # System command patterns
@@ -279,6 +293,49 @@ class IntentClassifier:
         "twelve": 12,
     }
 
+    # Duration query patterns - "how long was I in the shower?"
+    DURATION_QUERY_PATTERNS = [
+        r"how\s+long\s+(?:was|were|did)\s+(?:I|we)\s+(?:in|at|doing|on|with|for)\s+(?:the\s+)?(.+)",
+        r"how\s+much\s+time\s+(?:did\s+)?(?:I|we)\s+spend\s+(?:in|at|on|with|doing)\s+(?:the\s+)?(.+)",
+        r"how\s+long\s+(?:was|were)\s+(?:my|the)\s+(.+)",
+        r"what\s+(?:was|is)\s+the\s+duration\s+(?:of\s+)?(?:my\s+)?(.+)",
+        r"(?:tell\s+me\s+)?how\s+long\s+(?:I\s+)?(?:spent|took)\s+(?:on|with|doing|in)\s+(?:the\s+)?(.+)",
+        r"duration\s+(?:of\s+)?(?:my\s+)?(?:last\s+)?(.+)",
+    ]
+
+    # Activity search patterns - "what was I doing around 10 AM?"
+    ACTIVITY_SEARCH_PATTERNS = [
+        r"what\s+(?:was|were)\s+(?:I|we)\s+doing\s+(?:around|at|near|about)\s+(.+)",
+        r"what\s+(?:happened|did\s+I\s+do)\s+(?:around|at|near|about)\s+(.+)",
+        r"what\s+(?:happened|activities?|events?)\s+(?:between|from)\s+(.+)\s+(?:and|to|until)\s+(.+)",
+        r"(?:show|list|tell\s+me)\s+(?:my\s+)?(?:activities?|events?)\s+(?:around|at|near|about)\s+(.+)",
+        r"(?:what\s+)?activities?\s+(?:around|at|near|about)\s+(.+)",
+        r"what\s+(?:was|were)\s+(?:going\s+on|happening)\s+(?:around|at|about)\s+(.+)",
+    ]
+
+    # Event log patterns - "I'm going to the gym" (activity start/end)
+    EVENT_LOG_PATTERNS = [
+        # Activity start patterns
+        r"(?:i'?m|i\s+am)\s+(?:going|heading|off)\s+to\s+(?:the\s+)?(.+)",
+        r"(?:i'?m|i\s+am)\s+(?:starting|beginning)\s+(?:my\s+)?(.+)",
+        r"(?:i'?m|i\s+am)\s+about\s+to\s+(?:start\s+)?(.+)",
+        r"(?:i'?m|i\s+am)\s+(?:going\s+)?(?:to\s+)?(?:take|have)\s+(?:a\s+)?(.+)",
+        r"(?:starting|beginning)\s+(?:my\s+)?(.+?)(?:\s+now)?$",
+        # Activity end patterns
+        r"(?:i'?m|i\s+am)\s+(?:done|finished|back)\s+(?:with\s+)?(?:my\s+)?(?:the\s+)?(.+)?",
+        r"(?:just\s+)?finished\s+(?:my\s+)?(?:the\s+)?(.+)",
+        r"(?:just\s+)?(?:got\s+)?(?:done|completed)\s+(?:with\s+)?(?:my\s+)?(?:the\s+)?(.+)",
+        r"(?:i'?m|i\s+am)\s+(?:leaving|left)\s+(?:the\s+)?(.+)",
+        r"(?:ended|stopped)\s+(?:my\s+)?(.+)",
+        # Note/memo patterns
+        r"(?:remember|note|memo)[,:\s]+(.+)",
+        r"(?:make\s+a\s+)?note[:\s]+(?!of\s+that)(.+)",  # Exclude "of that" back-reference
+        r"(?:i\s+)?parked\s+(?:at|in|on)\s+(.+)",
+        # Location statements
+        r"(?:i'?m|i\s+am)\s+(?:at|in)\s+(.+?)(?:\s+right\s+now)?(?:\.|$)",
+        r"(?:i'?m|i\s+am)\s+(?:currently\s+)?(?:at|in)\s+(.+)",
+    ]
+
     def __init__(self) -> None:
         """Initialize the classifier."""
         # Pre-compile patterns for efficiency
@@ -308,6 +365,14 @@ class IntentClassifier:
         self._future_time_query = [
             re.compile(p, re.IGNORECASE) for p in self.FUTURE_TIME_QUERY_PATTERNS
         ]
+        # MongoDB time-based query patterns
+        self._duration_query = [
+            re.compile(p, re.IGNORECASE) for p in self.DURATION_QUERY_PATTERNS
+        ]
+        self._activity_search = [
+            re.compile(p, re.IGNORECASE) for p in self.ACTIVITY_SEARCH_PATTERNS
+        ]
+        self._event_log = [re.compile(p, re.IGNORECASE) for p in self.EVENT_LOG_PATTERNS]
 
     def classify(self, text: str) -> Intent:
         """Classify the given text into an intent.
@@ -379,6 +444,14 @@ class IntentClassifier:
 
         # Date query - check before general questions
         if intent := self._try_date_query(text):
+            return intent
+
+        # MongoDB time-based query intents
+        if intent := self._try_duration_query(text):
+            return intent
+        if intent := self._try_activity_search(text):
+            return intent
+        if intent := self._try_event_log(text):
             return intent
 
         # Default to general question
@@ -703,6 +776,110 @@ class IntentClassifier:
                 return Intent(
                     type=IntentType.FUTURE_TIME_QUERY,
                     confidence=0.95,
+                    entities=entities,
+                    raw_text=text,
+                )
+        return None
+
+    def _try_duration_query(self, text: str) -> Intent | None:
+        """Try to match duration query patterns.
+
+        Examples: "how long was I in the shower?", "how much time did I spend cooking?"
+        """
+        for pattern in self._duration_query:
+            match = pattern.search(text)
+            if match:
+                entities = {}
+                groups = match.groups()
+
+                # Extract activity from capture group
+                if groups and groups[0]:
+                    # Strip whitespace and trailing punctuation
+                    activity = groups[0].strip().rstrip("?.!,")
+                    entities["activity"] = activity
+
+                return Intent(
+                    type=IntentType.DURATION_QUERY,
+                    confidence=0.85,
+                    entities=entities,
+                    raw_text=text,
+                )
+        return None
+
+    def _try_activity_search(self, text: str) -> Intent | None:
+        """Try to match activity search patterns.
+
+        Examples: "what was I doing around 10 AM?", "what happened between 2 and 3 PM?"
+        """
+        for pattern in self._activity_search:
+            match = pattern.search(text)
+            if match:
+                entities = {}
+                groups = match.groups()
+
+                # Extract time reference(s)
+                if groups:
+                    if len(groups) >= 2 and groups[1]:
+                        # Range query: start and end time
+                        entities["start_time"] = groups[0].strip()
+                        entities["end_time"] = groups[1].strip()
+                    elif groups[0]:
+                        # Point query: single time reference
+                        entities["time_ref"] = groups[0].strip()
+
+                return Intent(
+                    type=IntentType.ACTIVITY_SEARCH,
+                    confidence=0.85,
+                    entities=entities,
+                    raw_text=text,
+                )
+        return None
+
+    def _try_event_log(self, text: str) -> Intent | None:
+        """Try to match event log patterns.
+
+        Examples: "I'm going to the gym", "finished my workout", "note: buy milk"
+        """
+        text_lower = text.lower()
+
+        for pattern in self._event_log:
+            match = pattern.search(text)
+            if match:
+                entities = {}
+                groups = match.groups()
+
+                # Extract context/activity from capture group
+                if groups and groups[0]:
+                    entities["context"] = groups[0].strip()
+
+                # Determine event type based on keywords
+                if any(
+                    kw in text_lower
+                    for kw in ["going", "heading", "starting", "beginning", "about to"]
+                ):
+                    entities["event_type"] = "activity_start"
+                elif any(
+                    kw in text_lower
+                    for kw in [
+                        "done",
+                        "finished",
+                        "back",
+                        "completed",
+                        "ended",
+                        "stopped",
+                        "leaving",
+                        "left",
+                    ]
+                ):
+                    entities["event_type"] = "activity_end"
+                elif any(kw in text_lower for kw in ["note", "memo", "remember", "parked"]):
+                    entities["event_type"] = "note"
+                else:
+                    entities["event_type"] = "note"
+
+                return Intent(
+                    type=IntentType.EVENT_LOG,
+                    confidence=0.85,
                     entities=entities,
                     raw_text=text,
                 )

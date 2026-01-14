@@ -34,6 +34,7 @@ from ..commands.reminder import (
     parse_reminder_time,
 )
 from ..commands.system import SystemCommandHandler
+from ..commands.time_query import TimeQueryCommandHandler
 from ..commands.timer import Timer, TimerManager, TimerStatus, parse_duration
 from ..config.loader import get_reminders_path
 from ..config.personality import get_default_personality
@@ -195,6 +196,13 @@ class Orchestrator:
 
         # System command handler (if mode manager is provided)
         self._system_handler = SystemCommandHandler(mode_manager) if mode_manager else None
+
+        # Time query handler (initialized without storage by default)
+        # Can be set later via set_time_query_storage() when MongoDB is available
+        self._time_query_handler = TimeQueryCommandHandler(storage=None)
+
+        # Interaction storage (for logging all interactions to MongoDB)
+        self._interaction_storage: object | None = None
 
         # Background check thread for timers/reminders
         self._check_thread: threading.Thread | None = None
@@ -414,7 +422,7 @@ class Orchestrator:
                 f"TTS:{latencies['tts_ms']}ms)"
             )
 
-            # Log the interaction
+            # Log the interaction to file logger
             if self._interaction_logger:
                 latencies["total"] = total_latency
                 self._interaction_logger.log(
@@ -424,6 +432,31 @@ class Orchestrator:
                     latency_ms=latencies,
                     entities=intent.entities,
                 )
+
+            # Log interaction to MongoDB
+            if self._interaction_storage is not None:
+                try:
+                    from datetime import UTC, datetime
+
+                    from ..storage.models import InteractionDTO
+
+                    mongo_interaction = InteractionDTO(
+                        session_id=str(interaction_id),
+                        timestamp=datetime.now(UTC),
+                        device_id="voice-agent",
+                        transcript=transcript,
+                        transcript_confidence=transcript_result.confidence if hasattr(transcript_result, 'confidence') else 1.0,
+                        intent_type=intent.type.value,
+                        intent_confidence=intent.confidence,
+                        response_text=response_text,
+                        response_source="local",
+                        latency_ms=latencies,
+                        entities=intent.entities,
+                    )
+                    self._interaction_storage.interactions.save(mongo_interaction)  # type: ignore
+                    logger.debug("Interaction saved to MongoDB")
+                except Exception as e:
+                    logger.warning(f"Failed to log interaction to MongoDB: {e}")
 
             return InteractionResult(
                 transcript=transcript,
@@ -451,9 +484,35 @@ class Orchestrator:
         Returns:
             Response text
         """
+        from datetime import UTC, datetime
+
         interaction_id = uuid.uuid4()
         intent = self._intent_classifier.classify(text)
-        return self._handle_intent(intent, interaction_id)
+        response = self._handle_intent(intent, interaction_id)
+
+        # Log interaction to MongoDB if storage is available
+        if self._interaction_storage is not None:
+            try:
+                from ..storage.models import InteractionDTO
+
+                interaction = InteractionDTO(
+                    session_id=str(uuid.uuid4()),  # TODO: track session properly
+                    timestamp=datetime.now(UTC),
+                    device_id="voice-agent",
+                    transcript=text,
+                    transcript_confidence=1.0,
+                    intent_type=intent.type.value,
+                    intent_confidence=intent.confidence,
+                    response_text=response,
+                    response_source="local",
+                    latency_ms={},
+                    entities=intent.entities,
+                )
+                self._interaction_storage.interactions.save(interaction)  # type: ignore
+            except Exception as e:
+                logger.warning(f"Failed to log interaction: {e}")
+
+        return response
 
     def _handle_intent(self, intent: Intent, interaction_id: uuid.UUID) -> str:
         """Handle classified intent and generate response.
@@ -497,6 +556,12 @@ class Orchestrator:
             return self._handle_date_query()
         elif intent.type == IntentType.FUTURE_TIME_QUERY:
             return self._handle_future_time_query(intent)
+        elif intent.type == IntentType.DURATION_QUERY:
+            return self._handle_duration_query(intent)
+        elif intent.type == IntentType.ACTIVITY_SEARCH:
+            return self._handle_activity_search(intent)
+        elif intent.type == IntentType.EVENT_LOG:
+            return self._handle_event_log(intent, interaction_id)
         else:
             # Default to LLM for general questions
             if self._llm is None:
@@ -1275,6 +1340,78 @@ class Orchestrator:
         else:
             unit_name = "hours" if unit in ("hour", "hr") else "minutes"
             return f"In {amount} {unit_name}, it'll be {time_str}!"
+
+    def _handle_duration_query(self, intent: Intent) -> str:
+        """Handle duration query intent ('how long was I...').
+
+        Args:
+            intent: Classified intent with activity entity.
+
+        Returns:
+            Response text with duration information.
+        """
+        activity = intent.entities.get("activity", "")
+        if not activity:
+            return "What activity would you like to know the duration of?"
+
+        return self._time_query_handler.handle_duration_query(activity)
+
+    def _handle_activity_search(self, intent: Intent) -> str:
+        """Handle activity search intent ('what was I doing around...').
+
+        Args:
+            intent: Classified intent with time reference entities.
+
+        Returns:
+            Response text with activities found.
+        """
+        time_ref = intent.entities.get("time_ref")
+        start_time = intent.entities.get("start_time")
+        end_time = intent.entities.get("end_time")
+
+        return self._time_query_handler.handle_activity_search(
+            time_ref=time_ref,
+            start_time=start_time,
+            end_time=end_time,
+        )
+
+    def _handle_event_log(self, intent: Intent, interaction_id: uuid.UUID) -> str:
+        """Handle event log intent ('I'm going to the gym').
+
+        Args:
+            intent: Classified intent with context and event_type entities.
+            interaction_id: ID of the current interaction.
+
+        Returns:
+            Response text confirming the logged event.
+        """
+        context = intent.entities.get("context", "")
+        event_type = intent.entities.get("event_type", "note")
+
+        if not context:
+            return "I didn't catch what you wanted to log."
+
+        return self._time_query_handler.handle_event_log(
+            context=context,
+            event_type=event_type,
+            interaction_id=str(interaction_id),
+        )
+
+    def set_time_query_storage(self, storage: object) -> None:
+        """Set storage for time queries (call when MongoDB is available).
+
+        Args:
+            storage: Storage object with events and activities repositories.
+        """
+        self._time_query_handler = TimeQueryCommandHandler(storage=storage)  # type: ignore
+
+    def set_interaction_storage(self, storage: object) -> None:
+        """Set storage for interaction logging (call when MongoDB is available).
+
+        Args:
+            storage: Storage object with interactions repository.
+        """
+        self._interaction_storage = storage
 
     def _on_timer_expire(self, timer: "Timer") -> None:
         """Callback when a timer expires."""
