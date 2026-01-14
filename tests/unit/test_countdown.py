@@ -7,9 +7,7 @@ and overlapping countdown combination.
 import time
 import uuid
 from datetime import UTC, datetime, timedelta
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock
 
 
 class TestCountdownPhraseGeneration:
@@ -79,7 +77,7 @@ class TestCountdownTimingAccuracy:
         # Mock TTS and playback to just record timing
         timings = []
 
-        def mock_synthesize(text):
+        def mock_synthesize(_text):
             timings.append(time.time())
             result = MagicMock()
             result.audio = b""
@@ -103,9 +101,6 @@ class TestCountdownTimingAccuracy:
 
         # We'll test the interval calculation logic instead of full countdown
         # to avoid 5-second test duration
-        expected_interval = 1.0
-        tolerance = 0.2  # 200ms
-
         # Verify the constant is set correctly
         assert hasattr(orchestrator, "_countdown_interval") or True  # Will be added
         # The actual timing test would require running the full countdown
