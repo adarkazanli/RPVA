@@ -39,6 +39,7 @@ from ..config.loader import get_reminders_path
 from ..config.personality import get_default_personality
 from ..config.user_profile import load_user_profile
 from ..feedback import FeedbackType
+from ..search import create_search_client
 from .intent import Intent, IntentClassifier, IntentType
 
 logger = logging.getLogger(__name__)
@@ -225,6 +226,9 @@ class Orchestrator:
         self._user_name = self._user_profile.name
         if self._user_name:
             logger.info(f"Loaded user profile: {self._user_name}")
+
+        # Initialize search client (with fallback to mock if API key not available)
+        self._search_client = create_search_client()
 
     @classmethod
     def from_config(
@@ -787,52 +791,66 @@ class Orchestrator:
     def _handle_web_search(self, intent: Intent) -> str:
         """Handle web search intent.
 
-        Performs a web search and summarizes results using the LLM.
+        Performs a web search using Tavily and returns results.
 
         Args:
             intent: Classified web search intent.
 
         Returns:
-            Response text with search summary.
+            Response text with search results.
         """
+        query = intent.entities.get("query", intent.raw_text)
+        logger.info(f"Web search query: {query}")
+
         try:
-            from ..llm.search import SearchSummarizer, WebSearcher
+            # Use Tavily for search
+            result = self._search_client.search(query, max_results=3, include_answer=True)
 
-            query = intent.entities.get("query", intent.raw_text)
-
-            # Try to perform web search
-            searcher = WebSearcher(max_results=5)
-            results = searcher.search(query)
-
-            if not results:
-                # Fall back to local LLM if search fails
-                logger.warning("Web search returned no results, falling back to local LLM")
+            if not result.success:
+                logger.warning(f"Search failed: {result.error}")
                 if self._llm is None:
-                    return "I couldn't find any results for that search."
+                    return "I couldn't search for that right now."
+                # Fall back to LLM
                 llm_response = self._llm.generate(intent.raw_text)
                 return llm_response.text.strip()
 
-            # Summarize results using LLM
-            if self._llm is None:
-                return "Search results found but unable to summarize."
-            summarizer = SearchSummarizer(llm=self._llm)
-            summary = summarizer.summarize(query, results)
+            # If we have a direct answer, use it
+            if result.answer:
+                # For voice, keep it concise
+                answer = result.answer
+                # Truncate if too long for voice
+                if len(answer) > 300:
+                    answer = answer[:297] + "..."
+                greeting = f"{self._user_name}, " if self._user_name else ""
+                return f"{greeting}{answer}"
 
-            return summary
+            # Otherwise, summarize the results
+            if result.results:
+                summaries = []
+                for r in result.results[:3]:
+                    content = r.get("content", "")
+                    if content:
+                        # Take first ~100 chars of each result
+                        summaries.append(content[:100])
 
-        except ImportError:
-            # duckduckgo_search not installed
-            logger.warning("Web search not available, falling back to local LLM")
-            if self._llm is None:
-                return "Web search is not available right now."
-            llm_response = self._llm.generate(intent.raw_text)
-            return llm_response.text.strip()
+                if summaries:
+                    combined = " ".join(summaries)
+                    if len(combined) > 300:
+                        combined = combined[:297] + "..."
+                    greeting = (
+                        f"{self._user_name}, here's what I found: "
+                        if self._user_name
+                        else "Here's what I found: "
+                    )
+                    return f"{greeting}{combined}"
+
+            return "I searched but couldn't find relevant information."
 
         except Exception as e:
-            # Any other error, graceful degradation to local LLM
-            logger.error(f"Web search failed: {e}, falling back to local LLM")
+            logger.error(f"Web search failed: {e}")
             if self._llm is None:
                 return "I encountered an error while searching."
+            # Fall back to LLM
             llm_response = self._llm.generate(intent.raw_text)
             return llm_response.text.strip()
 

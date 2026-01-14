@@ -181,7 +181,7 @@ def generate_success_sound(duration_ms: int = 200, sample_rate: int = 22050) -> 
     return b"".join(audio_data)
 
 
-def generate_timer_alert(duration_ms: int = 1000, sample_rate: int = 22050) -> bytes:
+def generate_timer_alert(_duration_ms: int = 1000, sample_rate: int = 22050) -> bytes:
     """Generate a timer alert sound (repeating pleasant tone pattern)."""
     audio_data = []
 
@@ -216,7 +216,7 @@ def generate_timer_alert(duration_ms: int = 1000, sample_rate: int = 22050) -> b
     return b"".join(audio_data)
 
 
-def generate_reminder_alert(duration_ms: int = 800, sample_rate: int = 22050) -> bytes:
+def generate_reminder_alert(_duration_ms: int = 800, sample_rate: int = 22050) -> bytes:
     """Generate a reminder alert sound (melodic chime sequence)."""
     audio_data = []
 
