@@ -12,9 +12,17 @@ Options:
 
 # Load .env file before anything else
 try:
+    from pathlib import Path as _Path
+
     from dotenv import load_dotenv
 
-    load_dotenv()
+    # Try to find .env in project root (parent of src/)
+    _project_root = _Path(__file__).parent.parent.parent
+    _env_file = _project_root / ".env"
+    if _env_file.exists():
+        load_dotenv(_env_file)
+    else:
+        load_dotenv()  # Fall back to current directory
 except ImportError:
     pass  # python-dotenv not installed, skip
 
