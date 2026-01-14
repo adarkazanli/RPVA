@@ -25,7 +25,11 @@ try:
     TAVILY_AVAILABLE = True
 except ImportError:
     TAVILY_AVAILABLE = False
-    TavilyClient = None  # type: ignore
+
+    class TavilyClient:  # type: ignore[no-redef]
+        """Stub for when tavily-python is not installed."""
+
+        pass
 
 
 @dataclass
@@ -148,7 +152,7 @@ class TavilySearch:
             Answer string or None if no answer found
         """
         try:
-            answer = self._client.qna_search(query=query)
+            answer: str = self._client.qna_search(query=query)
             logger.info(f"Quick answer for '{query}': {answer[:50]}...")
             return answer
         except Exception as e:
@@ -166,9 +170,9 @@ class MockTavilySearch:
     def search(
         self,
         query: str,
-        _max_results: int = 5,
-        _search_depth: str = "basic",
-        _include_answer: bool = True,
+        max_results: int = 5,  # noqa: ARG002
+        search_depth: str = "basic",  # noqa: ARG002
+        include_answer: bool = True,  # noqa: ARG002
     ) -> SearchResult:
         """Return mock search results."""
         return SearchResult(
