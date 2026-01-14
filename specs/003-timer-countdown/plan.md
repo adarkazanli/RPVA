@@ -17,7 +17,7 @@ Add a 5-second verbal countdown before timer/reminder completion (e.g., "Ammar, 
 
 **Language/Version**: Python 3.11+
 **Primary Dependencies**: Ollama (existing), standard library (threading, time, datetime)
-**Storage**: JSON file (`~/.ara/config.json`) for user profile
+**Storage**: JSON file (`~/.ara/user_profile.json`) for user profile
 **Testing**: pytest
 **Target Platform**: Raspberry Pi 4 (8GB RAM), Raspberry Pi OS (64-bit) Lite
 **Project Type**: Single project (voice assistant)
