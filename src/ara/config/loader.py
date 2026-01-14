@@ -170,9 +170,33 @@ def load_config(path: str | Path | None = None, profile: str | None = None) -> A
         return loader.load_profile("dev")
 
 
+def ensure_ara_dir() -> Path:
+    """Ensure the ~/.ara/ directory exists and return its path.
+
+    Creates the directory if it doesn't exist.
+
+    Returns:
+        Path to the ~/.ara/ directory.
+    """
+    ara_dir = Path.home() / ".ara"
+    ara_dir.mkdir(parents=True, exist_ok=True)
+    return ara_dir
+
+
+def get_reminders_path() -> Path:
+    """Get the path to the reminders persistence file.
+
+    Returns:
+        Path to ~/.ara/reminders.json
+    """
+    return ensure_ara_dir() / "reminders.json"
+
+
 __all__ = [
     "YAMLConfigLoader",
     "deep_merge",
+    "ensure_ara_dir",
+    "get_reminders_path",
     "load_config",
     "load_yaml_with_inheritance",
 ]

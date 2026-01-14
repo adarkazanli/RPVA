@@ -1,15 +1,20 @@
 """Reminder management for voice commands.
 
-Implements scheduled reminders with recurring support.
+Implements scheduled reminders with recurring support and JSON persistence.
 """
 
+import json
+import logging
 import re
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import Enum
+from pathlib import Path
 from uuid import UUID
+
+logger = logging.getLogger(__name__)
 
 
 class ReminderStatus(Enum):
@@ -65,17 +70,31 @@ class Reminder:
 class ReminderManager:
     """Manages reminders with create, cancel, query operations.
 
-    Provides thread-safe reminder management with trigger callbacks.
+    Provides thread-safe reminder management with trigger callbacks
+    and JSON persistence for reminders to survive system restarts.
     """
 
-    def __init__(self, on_trigger: Callable[[Reminder], None] | None = None) -> None:
+    def __init__(
+        self,
+        on_trigger: Callable[[Reminder], None] | None = None,
+        persistence_path: Path | str | None = None,
+    ) -> None:
         """Initialize the reminder manager.
 
         Args:
             on_trigger: Optional callback when a reminder triggers.
+            persistence_path: Path to JSON file for persistence. If None,
+                              reminders are stored in memory only.
         """
         self._reminders: dict[UUID, Reminder] = {}
         self._on_trigger = on_trigger
+        self._persistence_path: Path | None = (
+            Path(persistence_path) if persistence_path else None
+        )
+
+        # Load existing reminders from persistence
+        if self._persistence_path:
+            self._load()
 
     def create(
         self,
@@ -107,6 +126,7 @@ class ReminderManager:
             created_at=now,
         )
         self._reminders[reminder.id] = reminder
+        self._save()
         return reminder
 
     def cancel(self, reminder_id: UUID) -> bool:
@@ -123,6 +143,7 @@ class ReminderManager:
             return False
 
         reminder.status = ReminderStatus.CANCELLED
+        self._save()
         return True
 
     def get(self, reminder_id: UUID) -> Reminder | None:
@@ -176,6 +197,9 @@ class ReminderManager:
                 if reminder.recurrence != Recurrence.NONE:
                     self._create_next_occurrence(reminder)
 
+        if triggered:
+            self._save()
+
         return triggered
 
     def _create_next_occurrence(self, reminder: Reminder) -> Reminder:
@@ -218,6 +242,7 @@ class ReminderManager:
             return False
 
         reminder.status = ReminderStatus.DISMISSED
+        self._save()
         return True
 
     def format_reminder(self, reminder: Reminder) -> str:
@@ -236,6 +261,131 @@ class ReminderManager:
             return f"Reminder at {time_str}: {reminder.message}"
         else:
             return f"Reminder on {date_str} at {time_str}: {reminder.message}"
+
+    def clear_all(self) -> int:
+        """Clear all reminders.
+
+        Returns:
+            Number of reminders that were cleared.
+        """
+        pending = [r for r in self._reminders.values() if r.status == ReminderStatus.PENDING]
+        count = len(pending)
+
+        for reminder in pending:
+            reminder.status = ReminderStatus.CANCELLED
+
+        if count > 0:
+            self._save()
+
+        return count
+
+    def check_missed(self) -> list[Reminder]:
+        """Check for and return reminders that were missed during system downtime.
+
+        A missed reminder is one that:
+        - Has status PENDING
+        - Has remind_at time in the past
+
+        Returns:
+            List of missed reminders (not yet marked as triggered).
+        """
+        now = datetime.now(UTC)
+        missed = []
+
+        for reminder in self._reminders.values():
+            if reminder.status == ReminderStatus.PENDING and reminder.remind_at < now:
+                missed.append(reminder)
+
+        return sorted(missed, key=lambda r: r.remind_at)
+
+    def _save(self) -> None:
+        """Save reminders to JSON file."""
+        if not self._persistence_path:
+            return
+
+        try:
+            # Ensure parent directory exists
+            self._persistence_path.parent.mkdir(parents=True, exist_ok=True)
+
+            data = {
+                "version": 1,
+                "reminders": [
+                    {
+                        "id": str(r.id),
+                        "message": r.message,
+                        "remind_at": r.remind_at.isoformat(),
+                        "recurrence": r.recurrence.value,
+                        "status": r.status.value,
+                        "triggered_at": r.triggered_at.isoformat() if r.triggered_at else None,
+                        "created_by_interaction": str(r.created_by_interaction),
+                        "created_at": r.created_at.isoformat(),
+                    }
+                    for r in self._reminders.values()
+                ],
+            }
+
+            with open(self._persistence_path, "w") as f:
+                json.dump(data, f, indent=2)
+
+            logger.debug(f"Saved {len(self._reminders)} reminders to {self._persistence_path}")
+
+        except Exception as e:
+            logger.error(f"Failed to save reminders: {e}")
+
+    def _load(self) -> None:
+        """Load reminders from JSON file."""
+        if not self._persistence_path or not self._persistence_path.exists():
+            return
+
+        try:
+            with open(self._persistence_path) as f:
+                data = json.load(f)
+
+            version = data.get("version", 1)
+            if version != 1:
+                logger.warning(f"Unknown reminders file version: {version}")
+
+            for item in data.get("reminders", []):
+                try:
+                    reminder = Reminder(
+                        id=UUID(item["id"]),
+                        message=item["message"],
+                        remind_at=datetime.fromisoformat(item["remind_at"]),
+                        recurrence=Recurrence(item["recurrence"]),
+                        status=ReminderStatus(item["status"]),
+                        triggered_at=(
+                            datetime.fromisoformat(item["triggered_at"])
+                            if item.get("triggered_at")
+                            else None
+                        ),
+                        created_by_interaction=UUID(item["created_by_interaction"]),
+                        created_at=datetime.fromisoformat(item["created_at"]),
+                    )
+                    self._reminders[reminder.id] = reminder
+                except (KeyError, ValueError) as e:
+                    logger.warning(f"Skipping invalid reminder: {e}")
+
+            logger.info(f"Loaded {len(self._reminders)} reminders from {self._persistence_path}")
+
+        except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON in reminders file: {e}")
+        except Exception as e:
+            logger.error(f"Failed to load reminders: {e}")
+
+
+def format_time_local(dt: datetime) -> str:
+    """Format a datetime to local time string.
+
+    Args:
+        dt: Datetime to format (assumed UTC).
+
+    Returns:
+        Time string in format "H:MM AM/PM" (e.g., "2:34 AM").
+    """
+    # Convert from UTC to local time
+    local_dt = dt.astimezone()
+    # Format without leading zero on hour
+    return local_dt.strftime("%-I:%M %p").replace(" AM", " AM").replace(" PM", " PM")
 
 
 def parse_reminder_time(text: str) -> datetime | None:
