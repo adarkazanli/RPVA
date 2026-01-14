@@ -75,7 +75,7 @@ class TestPlatformParity:
         # Test cases should produce identical results on any platform
         test_cases = [
             ("set a timer for 5 minutes", IntentType.TIMER_SET),
-            ("what time is it", IntentType.GENERAL_QUESTION),
+            ("what time is it", IntentType.TIME_QUERY),
             ("search for Python tutorials", IntentType.WEB_SEARCH),
             ("go offline", IntentType.SYSTEM_COMMAND),
             ("remind me to call mom", IntentType.REMINDER_SET),

@@ -12,6 +12,8 @@ class IntentType(Enum):
     """Types of intents the system can handle."""
 
     GENERAL_QUESTION = "general_question"
+    TIME_QUERY = "time_query"
+    DATE_QUERY = "date_query"
     TIMER_SET = "timer_set"
     TIMER_CANCEL = "timer_cancel"
     TIMER_QUERY = "timer_query"
@@ -134,6 +136,28 @@ class IntentClassifier:
         r"i'?m\s+(\w+)",  # Handle contractions like "I'm Ammar"
     ]
 
+    # Time query patterns - must be checked before general questions
+    TIME_QUERY_PATTERNS = [
+        r"what\s+time\s+is\s+it",
+        r"what'?s\s+the\s+time",
+        r"what\s+time\s+do\s+you\s+have",
+        r"what\s+time\s+(?:is\s+it\s+)?(?:right\s+)?now",
+        r"(?:can\s+you\s+)?tell\s+me\s+(?:the\s+)?time",
+        r"(?:do\s+you\s+)?have\s+(?:the\s+)?time",
+        r"current\s+time",
+        r"time\s+(?:please|now)",
+    ]
+
+    # Date query patterns
+    DATE_QUERY_PATTERNS = [
+        r"what\s+is\s+(?:the\s+)?(?:today'?s\s+)?date",
+        r"what'?s\s+the\s+date\s*(?:today)?",
+        r"what\s+day\s+is\s+(?:it|today)",
+        r"what'?s\s+today",
+        r"(?:can\s+you\s+)?tell\s+me\s+(?:the\s+)?date",
+        r"today'?s\s+date",
+    ]
+
     def __init__(self) -> None:
         """Initialize the classifier."""
         # Pre-compile patterns for efficiency
@@ -152,6 +176,8 @@ class IntentClassifier:
         self._web_search = [re.compile(p, re.IGNORECASE) for p in self.WEB_SEARCH_PATTERNS]
         self._system = [(re.compile(p, re.IGNORECASE), cmd) for p, cmd in self.SYSTEM_PATTERNS]
         self._user_name_set = [re.compile(p, re.IGNORECASE) for p in self.USER_NAME_SET_PATTERNS]
+        self._time_query = [re.compile(p, re.IGNORECASE) for p in self.TIME_QUERY_PATTERNS]
+        self._date_query = [re.compile(p, re.IGNORECASE) for p in self.DATE_QUERY_PATTERNS]
 
     def classify(self, text: str) -> Intent:
         """Classify the given text into an intent.
@@ -205,6 +231,14 @@ class IntentClassifier:
 
         # User name set
         if intent := self._try_user_name_set(text):
+            return intent
+
+        # Time query - check before general questions
+        if intent := self._try_time_query(text):
+            return intent
+
+        # Date query - check before general questions
+        if intent := self._try_date_query(text):
             return intent
 
         # Default to general question
@@ -403,6 +437,30 @@ class IntentClassifier:
                     type=IntentType.USER_NAME_SET,
                     confidence=0.9,
                     entities=entities,
+                    raw_text=text,
+                )
+        return None
+
+    def _try_time_query(self, text: str) -> Intent | None:
+        """Try to match time query patterns."""
+        for pattern in self._time_query:
+            if pattern.search(text):
+                return Intent(
+                    type=IntentType.TIME_QUERY,
+                    confidence=0.95,
+                    entities={},
+                    raw_text=text,
+                )
+        return None
+
+    def _try_date_query(self, text: str) -> Intent | None:
+        """Try to match date query patterns."""
+        for pattern in self._date_query:
+            if pattern.search(text):
+                return Intent(
+                    type=IntentType.DATE_QUERY,
+                    confidence=0.95,
+                    entities={},
                     raw_text=text,
                 )
         return None

@@ -418,6 +418,10 @@ class Orchestrator:
             return self._handle_system_command(intent)
         elif intent.type == IntentType.USER_NAME_SET:
             return self._handle_user_name_set(intent)
+        elif intent.type == IntentType.TIME_QUERY:
+            return self._handle_time_query()
+        elif intent.type == IntentType.DATE_QUERY:
+            return self._handle_date_query()
         else:
             # Default to LLM for general questions
             if self._llm is None:
@@ -833,6 +837,35 @@ class Orchestrator:
 
         logger.info(f"User name set to: {name}")
         return f"Got it, {name}! I'll use your name from now on."
+
+    def _handle_time_query(self) -> str:
+        """Handle time query intent by returning the actual system time.
+
+        Returns:
+            Response text with current time.
+        """
+        now = datetime.now()
+        # Format: "It's 3:45 PM"
+        time_str = now.strftime("%-I:%M %p")
+        return f"It's {time_str}."
+
+    def _handle_date_query(self) -> str:
+        """Handle date query intent by returning the actual system date.
+
+        Returns:
+            Response text with current date.
+        """
+        now = datetime.now()
+        # Format: "Today is Tuesday, January 14th, 2025"
+        day_name = now.strftime("%A")
+        month_name = now.strftime("%B")
+        day = now.day
+        year = now.year
+
+        # Add ordinal suffix
+        suffix = "th" if 10 <= day % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(day % 10, "th")
+
+        return f"Today is {day_name}, {month_name} {day}{suffix}, {year}."
 
     def _on_timer_expire(self, timer: "Timer") -> None:
         """Callback when a timer expires."""

@@ -68,8 +68,8 @@ class TestOnlineQueryFlow:
 
     def test_regular_query_stays_local(self, orchestrator: Orchestrator) -> None:
         """Test regular queries stay local."""
-        orchestrator._transcriber.set_response("what time is it")
-        orchestrator._llm.set_response("It's 3:30 PM.")
+        orchestrator._transcriber.set_response("what is the capital of France")
+        orchestrator._llm.set_response("The capital of France is Paris.")
         orchestrator._wake_word.schedule_detection(at_chunk=0, confidence=0.9)
         orchestrator._capture.set_audio_data(bytes(16000 * 2))
 

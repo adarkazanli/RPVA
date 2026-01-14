@@ -81,7 +81,10 @@ class TestCIMockAudio:
 
         assert result is not None
         assert result.transcript == "what time is it"
-        assert "3:30" in result.response_text
+        # Time queries now return actual system time, not LLM response
+        assert result.intent == "time_query"
+        assert "It's" in result.response_text
+        assert "AM" in result.response_text or "PM" in result.response_text
 
     def test_mock_wav_file_loading(self) -> None:
         """Test mock capture can load from WAV files."""

@@ -235,7 +235,7 @@ class TestIntentClassificationIntegration:
 
         intents = [classifier.classify(text) for text in sequence]
 
-        assert intents[0].type == IntentType.GENERAL_QUESTION
+        assert intents[0].type == IntentType.TIME_QUERY
         assert intents[1].type == IntentType.TIMER_SET
         assert intents[2].type == IntentType.REMINDER_SET
         assert intents[3].type == IntentType.TIMER_QUERY

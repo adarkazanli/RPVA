@@ -128,10 +128,17 @@ class TestIntentClassifier:
         intent = classifier.classify("what is the capital of France")
         assert intent.type == IntentType.GENERAL_QUESTION
 
-    def test_classify_general_question_time(self, classifier: IntentClassifier) -> None:
-        """Test classifying time question as general."""
+    def test_classify_time_query(self, classifier: IntentClassifier) -> None:
+        """Test classifying time query."""
         intent = classifier.classify("what time is it")
-        assert intent.type == IntentType.GENERAL_QUESTION
+        assert intent.type == IntentType.TIME_QUERY
+        assert intent.confidence == 0.95
+
+    def test_classify_date_query(self, classifier: IntentClassifier) -> None:
+        """Test classifying date query."""
+        intent = classifier.classify("what's the date today")
+        assert intent.type == IntentType.DATE_QUERY
+        assert intent.confidence == 0.95
 
     # System commands
     def test_classify_system_go_offline(self, classifier: IntentClassifier) -> None:

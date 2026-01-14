@@ -58,7 +58,10 @@ class TestVoiceLoopIntegration:
         # Verify the pipeline worked
         assert result is not None
         assert result.transcript == "what time is it"
-        assert "3:30" in result.response_text
+        # Time queries now return actual system time
+        assert result.intent == "time_query"
+        assert "It's" in result.response_text
+        assert "AM" in result.response_text or "PM" in result.response_text
 
         # Verify TTS was called
         assert mock_components["synthesizer"].call_count == 1
