@@ -452,8 +452,130 @@ class InteractionStorage:
         self._sqlite.close()
 
 
+class MongoDBStorage:
+    """MongoDB storage backend for interactions.
+
+    Uses the ara.storage module for MongoDB operations with fallback to SQLite.
+    """
+
+    def __init__(
+        self,
+        uri: str = "mongodb://localhost:27017",
+        database_name: str = "ara",
+        fallback_db_path: Path | None = None,
+    ) -> None:
+        """Initialize MongoDB storage with optional SQLite fallback.
+
+        Args:
+            uri: MongoDB connection URI.
+            database_name: Name of the database to use.
+            fallback_db_path: Path for SQLite fallback database (optional).
+        """
+        self._uri = uri
+        self._database_name = database_name
+        self._mongo_client: "MongoStorageClient | None" = None
+        self._fallback: SQLiteStorage | None = None
+        self._use_fallback = False
+
+        if fallback_db_path:
+            self._fallback = SQLiteStorage(fallback_db_path)
+
+        self._connect()
+
+    def _connect(self) -> None:
+        """Attempt to connect to MongoDB."""
+        try:
+            from ara.storage import MongoStorageClient
+
+            self._mongo_client = MongoStorageClient(
+                uri=self._uri,
+                database_name=self._database_name,
+            )
+            self._mongo_client.connect()
+            self._use_fallback = False
+        except Exception:
+            self._use_fallback = True
+            self._mongo_client = None
+
+    def _interaction_to_dto(self, interaction: Interaction) -> "InteractionDTO":
+        """Convert Interaction to InteractionDTO."""
+        from ara.storage import InteractionDTO
+
+        return InteractionDTO(
+            session_id=str(interaction.session_id),
+            timestamp=interaction.timestamp,
+            device_id=interaction.device_id,
+            transcript=interaction.transcript,
+            transcript_confidence=interaction.transcript_confidence,
+            audio_duration_ms=interaction.audio_duration_ms,
+            intent_type=interaction.intent,
+            intent_confidence=interaction.intent_confidence,
+            entities=interaction.entities,
+            response_text=interaction.response,
+            response_source=interaction.response_source.value,
+            latency_ms=interaction.latency_ms,
+        )
+
+    def save(self, interaction: Interaction) -> None:
+        """Save an interaction to MongoDB (or fallback to SQLite).
+
+        Args:
+            interaction: The interaction to save.
+        """
+        if self._use_fallback and self._fallback:
+            self._fallback.save(interaction)
+            return
+
+        if self._mongo_client is not None:
+            try:
+                dto = self._interaction_to_dto(interaction)
+                self._mongo_client.interactions.save(dto)
+            except Exception:
+                # Fallback to SQLite on error
+                if self._fallback:
+                    self._fallback.save(interaction)
+                    self._use_fallback = True
+
+    def get_recent(self, limit: int = 10) -> list[Interaction]:
+        """Get recent interactions.
+
+        Args:
+            limit: Maximum number to return.
+
+        Returns:
+            List of interactions.
+        """
+        if self._use_fallback and self._fallback:
+            return self._fallback.get_recent(limit=limit)
+
+        # For now, use fallback for reads until full migration
+        if self._fallback:
+            return self._fallback.get_recent(limit=limit)
+
+        return []
+
+    def is_connected(self) -> bool:
+        """Check if connected to MongoDB."""
+        if self._mongo_client is not None:
+            return self._mongo_client.is_connected()
+        return False
+
+    def close(self) -> None:
+        """Close storage connections."""
+        if self._mongo_client is not None:
+            self._mongo_client.disconnect()
+        if self._fallback is not None:
+            self._fallback.close()
+
+
+# Type hint import for MongoDBStorage
+if False:  # TYPE_CHECKING equivalent without import
+    from ara.storage import InteractionDTO, MongoStorageClient
+
+
 __all__ = [
     "InteractionStorage",
     "JSONLWriter",
+    "MongoDBStorage",
     "SQLiteStorage",
 ]

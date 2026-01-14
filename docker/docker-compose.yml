@@ -1,0 +1,26 @@
+version: '3.9'
+
+services:
+  mongodb:
+    image: arm64v8/mongo:4.4.18
+    container_name: ara_mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    command:
+      - "--wiredTigerCacheSizeGB=4"
+    deploy:
+      resources:
+        limits:
+          memory: 4500M
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongo localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    restart: unless-stopped
+
+volumes:
+  mongodb_data:

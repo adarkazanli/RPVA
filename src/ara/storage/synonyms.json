@@ -1,0 +1,21 @@
+{
+  "gym": ["workout", "training", "exercise", "fitness", "weights", "lifting"],
+  "shower": ["bath", "washing", "rinse", "clean up"],
+  "cooking": ["making food", "preparing", "meal prep", "kitchen"],
+  "workout": ["gym", "exercise", "training", "fitness"],
+  "lunch": ["eating", "meal", "food", "midday meal"],
+  "dinner": ["eating", "meal", "food", "supper", "evening meal"],
+  "breakfast": ["eating", "meal", "food", "morning meal"],
+  "meeting": ["call", "conference", "discussion", "standup", "sync"],
+  "work": ["office", "job", "working", "desk"],
+  "walk": ["walking", "stroll", "hike", "hiking"],
+  "run": ["running", "jogging", "jog"],
+  "nap": ["rest", "sleep", "snooze"],
+  "reading": ["book", "studying", "learning"],
+  "shopping": ["store", "grocery", "errands"],
+  "commute": ["drive", "driving", "travel", "bus", "train"],
+  "meditation": ["mindfulness", "relaxation", "breathing"],
+  "yoga": ["stretching", "exercise", "practice"],
+  "cleaning": ["tidying", "housework", "chores"],
+  "laundry": ["washing", "clothes", "folding"]
+}
