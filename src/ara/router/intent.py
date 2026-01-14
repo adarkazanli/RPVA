@@ -137,7 +137,8 @@ class IntentClassifier:
         r"my\s+name\s+is\s+(\w+)",
         r"call\s+me\s+(\w+)",
         r"(?:set|change|update)\s+my\s+name\s+to\s+(\w+)",
-        r"i'?m\s+(\w+)",  # Handle contractions like "I'm Ammar"
+        r"i'?m\s+(\w+)",  # Handle "I'm" contraction
+        r"i\s+am\s+(\w+)",  # Handle "I am" expanded form
     ]
 
     # Time query patterns - must be checked before general questions

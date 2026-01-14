@@ -103,10 +103,11 @@ class IntentType(Enum):
 **Patterns**:
 ```python
 USER_NAME_SET_PATTERNS = [
-    r"my name is (\w+)",
-    r"call me (\w+)",
-    r"set my name to (\w+)",
-    r"i'm (\w+)",  # Handle contractions
+    r"my\s+name\s+is\s+(\w+)",
+    r"call\s+me\s+(\w+)",
+    r"(?:set|change|update)\s+my\s+name\s+to\s+(\w+)",
+    r"i'?m\s+(\w+)",  # Handle "I'm" contraction
+    r"i\s+am\s+(\w+)",  # Handle "I am" expanded form
 ]
 ```
 
