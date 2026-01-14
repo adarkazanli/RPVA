@@ -781,7 +781,9 @@ class IntentClassifier:
 
                 # Extract activity from capture group
                 if groups and groups[0]:
-                    entities["activity"] = groups[0].strip()
+                    # Strip whitespace and trailing punctuation
+                    activity = groups[0].strip().rstrip("?.!,")
+                    entities["activity"] = activity
 
                 return Intent(
                     type=IntentType.DURATION_QUERY,

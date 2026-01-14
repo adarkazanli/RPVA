@@ -239,6 +239,34 @@ def main() -> int:
         orchestrator = Orchestrator.from_config(config, use_mocks=use_mocks)
         logger.info("Components initialized successfully")
 
+        # Initialize MongoDB storage for time queries
+        mongo_client = None
+        try:
+            from .storage.client import MongoStorageClient
+            from .storage.events import ActivityRepository, EventRepository
+
+            mongo_client = MongoStorageClient(
+                uri="mongodb://localhost:27017",
+                database_name="ara",
+            )
+            mongo_client.connect()
+
+            if mongo_client.is_connected():
+                # Create storage facade
+                class _StorageFacade:
+                    def __init__(self, mongo: MongoStorageClient):
+                        self.events = EventRepository(mongo.database["events"])
+                        self.activities = ActivityRepository(mongo.database["activities"])
+
+                storage = _StorageFacade(mongo_client)
+                orchestrator.set_time_query_storage(storage)
+                logger.info("MongoDB storage connected")
+            else:
+                logger.warning("MongoDB not available - time queries will be disabled")
+        except Exception as e:
+            logger.warning(f"MongoDB storage not available: {e}")
+            logger.warning("Time queries and event tracking will be disabled")
+
         # Handle single test utterance mode
         if args.test_utterance:
             return handle_test_utterance(orchestrator, args.test_utterance, logger)
@@ -285,6 +313,9 @@ def main() -> int:
         logger.info("Keyboard interrupt received")
     finally:
         orchestrator.stop()
+        if mongo_client is not None:
+            mongo_client.disconnect()
+            logger.info("MongoDB disconnected")
         logger.info("Ara shut down gracefully")
 
     return 0
