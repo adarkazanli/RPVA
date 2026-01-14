@@ -837,7 +837,11 @@ class Orchestrator:
                     combined = " ".join(summaries)
                     if len(combined) > 300:
                         combined = combined[:297] + "..."
-                    greeting = f"{self._user_name}, here's what I found: " if self._user_name else "Here's what I found: "
+                    greeting = (
+                        f"{self._user_name}, here's what I found: "
+                        if self._user_name
+                        else "Here's what I found: "
+                    )
                     return f"{greeting}{combined}"
 
             return "I searched but couldn't find relevant information."

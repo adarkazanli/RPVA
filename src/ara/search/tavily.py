@@ -65,9 +65,7 @@ class TavilySearch:
             RuntimeError: If Tavily is not available or no API key provided.
         """
         if not TAVILY_AVAILABLE:
-            raise RuntimeError(
-                "Tavily not available. Install with: pip install tavily-python"
-            )
+            raise RuntimeError("Tavily not available. Install with: pip install tavily-python")
 
         self._api_key = api_key or os.environ.get("TAVILY_API_KEY")
         if not self._api_key:
@@ -109,11 +107,13 @@ class TavilySearch:
             # Extract results
             results = []
             for r in response.get("results", []):
-                results.append({
-                    "title": r.get("title", ""),
-                    "url": r.get("url", ""),
-                    "content": r.get("content", ""),
-                })
+                results.append(
+                    {
+                        "title": r.get("title", ""),
+                        "url": r.get("url", ""),
+                        "content": r.get("content", ""),
+                    }
+                )
 
             answer = response.get("answer") if include_answer else None
 
