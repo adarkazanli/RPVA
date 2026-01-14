@@ -26,6 +26,7 @@ class IntentType(Enum):
     WEB_SEARCH = "web_search"
     SYSTEM_COMMAND = "system_command"
     USER_NAME_SET = "user_name_set"
+    USER_PASSWORD_SET = "user_password_set"
     UNKNOWN = "unknown"
 
 
@@ -110,6 +111,14 @@ class IntentClassifier:
         r"what\s+(?:were\s+)?(?:my\s+)?(?:last|recent)\s+(?:questions?|queries)",
         r"(?:show|list)\s+(?:my\s+)?(?:conversation\s+)?history",
         r"what\s+have\s+I\s+(?:asked|said)\s+(?:recently|today)",
+        # Time-based history queries
+        r"how\s+long\s+(?:ago|since)\s+(?:did\s+)?I\s+(?:said?|asked?|mentioned?)\s+(.+)",
+        r"when\s+did\s+I\s+(?:say|ask|mention)\s+(.+)",
+        r"(?:look(?:ing)?\s+at|check)\s+(?:my\s+)?history.+(?:tell|when|how\s+long)",
+        r"(?:look(?:ing)?\s+at|check)\s+(?:my\s+)?(?:history|records?)",
+        # Content-based history queries
+        r"did\s+I\s+(?:say|ask|mention)\s+(?:anything\s+)?(?:about\s+)?(.+)",
+        r"have\s+I\s+(?:said|asked|mentioned)\s+(.+)",
     ]
 
     # Web search patterns (more specific patterns first)
@@ -147,12 +156,60 @@ class IntentClassifier:
     ]
 
     # User name set patterns
+    # IMPORTANT: Avoid overly broad patterns like "i'm \w+" which match
+    # "I'm gonna", "I'm going", etc. Only use explicit name-setting phrases.
     USER_NAME_SET_PATTERNS = [
         r"my\s+name\s+is\s+(\w+)",
         r"call\s+me\s+(\w+)",
         r"(?:set|change|update)\s+my\s+name\s+to\s+(\w+)",
-        r"i'?m\s+(\w+)",  # Handle "I'm" contraction
-        r"i\s+am\s+(\w+)",  # Handle "I am" expanded form
+        r"you\s+can\s+call\s+me\s+(\w+)",
+        r"i\s+go\s+by\s+(\w+)",
+    ]
+
+    # Common words that should NOT be extracted as names
+    # Used to filter false positives from pattern matches
+    NAME_BLACKLIST = {
+        "gonna",
+        "going",
+        "trying",
+        "about",
+        "just",
+        "here",
+        "there",
+        "fine",
+        "good",
+        "okay",
+        "ok",
+        "back",
+        "home",
+        "done",
+        "ready",
+        "sorry",
+        "sure",
+        "happy",
+        "sad",
+        "tired",
+        "hungry",
+        "busy",
+        "late",
+        "early",
+        "leaving",
+        "coming",
+        "working",
+        "looking",
+        "thinking",
+        "wondering",
+        "asking",
+        "saying",
+        "telling",
+    }
+
+    # Password set patterns for profile protection
+    USER_PASSWORD_SET_PATTERNS = [
+        r"(?:set|change|update)\s+(?:my\s+)?password\s+(?:to\s+)?(\w+)",
+        r"(?:my\s+)?password\s+(?:is|should\s+be)\s+(\w+)",
+        r"(?:make|use)\s+(\w+)\s+(?:as\s+)?(?:my\s+)?password",
+        r"protect\s+(?:my\s+)?(?:name|profile)\s+with\s+(?:password\s+)?(\w+)",
     ]
 
     # Time query patterns - must be checked before general questions
@@ -223,6 +280,9 @@ class IntentClassifier:
         self._web_search = [re.compile(p, re.IGNORECASE) for p in self.WEB_SEARCH_PATTERNS]
         self._system = [(re.compile(p, re.IGNORECASE), cmd) for p, cmd in self.SYSTEM_PATTERNS]
         self._user_name_set = [re.compile(p, re.IGNORECASE) for p in self.USER_NAME_SET_PATTERNS]
+        self._user_password_set = [
+            re.compile(p, re.IGNORECASE) for p in self.USER_PASSWORD_SET_PATTERNS
+        ]
         self._time_query = [re.compile(p, re.IGNORECASE) for p in self.TIME_QUERY_PATTERNS]
         self._date_query = [re.compile(p, re.IGNORECASE) for p in self.DATE_QUERY_PATTERNS]
         self._future_time_query = [
@@ -277,6 +337,10 @@ class IntentClassifier:
 
         # System commands
         if intent := self._try_system_command(text):
+            return intent
+
+        # User password set (check before name set)
+        if intent := self._try_user_password_set(text):
             return intent
 
         # User name set
@@ -432,12 +496,27 @@ class IntentClassifier:
             match = pattern.search(text)
             if match:
                 entities = {}
+
+                # Extract search content from capture group if present
+                groups = match.groups()
+                if groups and groups[0]:
+                    entities["search_content"] = groups[0].strip()
+
+                # Determine query type
+                text_lower = text.lower()
+                if "how long" in text_lower or "when did" in text_lower:
+                    entities["query_type"] = "time_since"
+                elif "did i" in text_lower or "have i" in text_lower:
+                    entities["query_type"] = "content_check"
+                else:
+                    entities["query_type"] = "list"
+
                 # Try to detect time reference
-                if "yesterday" in text.lower():
+                if "yesterday" in text_lower:
                     entities["time_ref"] = "yesterday"
-                elif "today" in text.lower():
+                elif "today" in text_lower:
                     entities["time_ref"] = "today"
-                elif "recent" in text.lower() or "last" in text.lower():
+                elif "recent" in text_lower or "last" in text_lower:
                     entities["time_ref"] = "recent"
 
                 return Intent(
@@ -493,16 +572,48 @@ class IntentClassifier:
 
                 # Extract the name from the match
                 if groups and groups[0]:
-                    name = groups[0].strip()
+                    name = groups[0].strip().lower()
+
+                    # Filter out common words that aren't names
+                    if name in self.NAME_BLACKLIST:
+                        continue
+
                     # Capitalize first letter
                     entities["name"] = name.capitalize()
 
-                return Intent(
-                    type=IntentType.USER_NAME_SET,
-                    confidence=0.9,
-                    entities=entities,
-                    raw_text=text,
-                )
+                    # Check if password is mentioned in the text (for name change with password)
+                    password_match = re.search(
+                        r"(?:password|passcode|code)\s+(?:is\s+)?(\w+)", text, re.IGNORECASE
+                    )
+                    if password_match:
+                        entities["password"] = password_match.group(1)
+
+                    return Intent(
+                        type=IntentType.USER_NAME_SET,
+                        confidence=0.9,
+                        entities=entities,
+                        raw_text=text,
+                    )
+        return None
+
+    def _try_user_password_set(self, text: str) -> Intent | None:
+        """Try to match user password set patterns."""
+        for pattern in self._user_password_set:
+            match = pattern.search(text)
+            if match:
+                entities = {}
+                groups = match.groups()
+
+                # Extract the password from the match
+                if groups and groups[0]:
+                    entities["password"] = groups[0].strip()
+
+                    return Intent(
+                        type=IntentType.USER_PASSWORD_SET,
+                        confidence=0.9,
+                        entities=entities,
+                        raw_text=text,
+                    )
         return None
 
     def _try_time_query(self, text: str) -> Intent | None:

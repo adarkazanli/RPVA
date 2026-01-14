@@ -61,9 +61,7 @@ def _log_interaction_timing(event: str, transcript: str = "") -> None:
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         if transcript:
-            # Truncate long transcripts
-            short_transcript = transcript[:50] + "..." if len(transcript) > 50 else transcript
-            line = f'{timestamp}: Voice agent {event} -> "{short_transcript}"\n'
+            line = f'{timestamp}: Voice agent {event} -> "{transcript}"\n'
         else:
             line = f"{timestamp}: Voice agent {event}\n"
 
@@ -229,6 +227,8 @@ class Orchestrator:
 
         # Initialize search client (with fallback to mock if API key not available)
         self._search_client = create_search_client()
+        search_client_type = type(self._search_client).__name__
+        logger.info(f"Search client initialized: {search_client_type}")
 
     @classmethod
     def from_config(
@@ -377,6 +377,35 @@ class Orchestrator:
             self._playback.play(synthesis_result.audio, synthesis_result.sample_rate)
             latencies["play_ms"] = int((time.time() - play_start) * 1000)
 
+            # Step 8: Check for follow-up if response ended with a question
+            if response_text.strip().endswith("?"):
+                logger.info("Response ended with question, listening for follow-up...")
+                follow_up_audio = self._record_follow_up(timeout_ms=5000)
+
+                if follow_up_audio:
+                    # Process the follow-up
+                    follow_up_result = self._transcriber.transcribe(follow_up_audio, 16000)
+                    follow_up_text = follow_up_result.text.strip()
+
+                    if follow_up_text:
+                        logger.info(f"Follow-up: '{follow_up_text}'")
+                        _log_interaction_timing("captured", follow_up_text)
+
+                        # Classify and handle follow-up
+                        follow_up_intent = self._intent_classifier.classify(follow_up_text)
+                        follow_up_response = self._handle_intent(follow_up_intent, interaction_id)
+                        _log_interaction_timing("responded", follow_up_response)
+
+                        # Synthesize and play follow-up response
+                        follow_up_synthesis = self._synthesizer.synthesize(follow_up_response)
+                        self._playback.play(
+                            follow_up_synthesis.audio, follow_up_synthesis.sample_rate
+                        )
+
+                        # Update transcript/response for logging
+                        transcript = f"{transcript} | {follow_up_text}"
+                        response_text = f"{response_text} | {follow_up_response}"
+
             total_latency = int((time.time() - start_time) * 1000)
 
             logger.info(
@@ -458,6 +487,8 @@ class Orchestrator:
             return self._handle_system_command(intent)
         elif intent.type == IntentType.USER_NAME_SET:
             return self._handle_user_name_set(intent)
+        elif intent.type == IntentType.USER_PASSWORD_SET:
+            return self._handle_user_password_set(intent)
         elif intent.type == IntentType.TIME_QUERY:
             return self._handle_time_query()
         elif intent.type == IntentType.DATE_QUERY:
@@ -468,7 +499,21 @@ class Orchestrator:
             # Default to LLM for general questions
             if self._llm is None:
                 return "I'm not able to process that request right now."
-            llm_response = self._llm.generate(intent.raw_text)
+
+            # Inject current time context for the LLM
+            now = datetime.now()
+            time_str = now.strftime("%-I:%M %p")
+            date_str = now.strftime("%A, %B %d, %Y")
+            context = f"[Current time: {time_str}, {date_str}]"
+
+            # Add user name context if available
+            if self._user_name:
+                context += f" [User's name: {self._user_name}]"
+
+            # Combine context with user query
+            query_with_context = f"{context}\n\nUser: {intent.raw_text}"
+
+            llm_response = self._llm.generate(query_with_context)
             return llm_response.text.strip()
 
     def _handle_timer_set(self, intent: Intent, interaction_id: uuid.UUID) -> str:
@@ -740,117 +785,241 @@ class Orchestrator:
 
     def _handle_history_query(self, intent: Intent) -> str:
         """Handle history query intent."""
-        if not self._interaction_logger:
-            return "I don't have access to conversation history right now."
+        # Read from the interaction log file directly
+        log_file = _INTERACTION_LOG_FILE
 
-        from datetime import date, datetime, timedelta
+        if not log_file.exists():
+            return "I don't have any conversation history yet."
 
+        try:
+            with open(log_file) as f:
+                lines = f.readlines()
+        except Exception as e:
+            logger.error(f"Failed to read interaction log: {e}")
+            return "I couldn't access the conversation history."
+
+        if not lines:
+            return "I don't have any conversation history yet."
+
+        query_type = intent.entities.get("query_type", "list")
+        search_content = intent.entities.get("search_content", "")
         time_ref = intent.entities.get("time_ref", "recent")
 
-        # Determine the date range
-        today = date.today()
-        if time_ref == "yesterday":
-            target_date = today - timedelta(days=1)
-            start = datetime.combine(target_date, datetime.min.time()).replace(tzinfo=UTC)
-            end = datetime.combine(target_date, datetime.max.time()).replace(tzinfo=UTC)
-        elif time_ref == "today":
-            start = datetime.combine(today, datetime.min.time()).replace(tzinfo=UTC)
-            end = datetime.now(UTC)
+        # Parse the log entries - each entry has timestamp (datetime) and content (str)
+        entries: list[dict[str, datetime | str]] = []
+        for line in lines:
+            # Format: "2026-01-14 10:32:18: Voice agent captured -> "text""
+            if "captured ->" in line:
+                try:
+                    # Extract timestamp and content
+                    timestamp_str = (
+                        line.split(":")[0] + ":" + line.split(":")[1] + ":" + line.split(":")[2]
+                    )
+                    timestamp = datetime.strptime(timestamp_str.strip(), "%Y-%m-%d %H:%M:%S")
+                    content = line.split('-> "')[1].rstrip('"\n')
+                    entries.append({"timestamp": timestamp, "content": content})
+                except (IndexError, ValueError):
+                    continue
+
+        if not entries:
+            return "I don't have any conversation history yet."
+
+        # Handle different query types
+        if query_type == "time_since" and search_content:
+            # Search for content and calculate time since
+            search_lower = search_content.lower()
+            now = datetime.now()
+
+            for entry in reversed(entries):  # Search from most recent
+                entry_content = str(entry["content"])
+                entry_timestamp = entry["timestamp"]
+                if not isinstance(entry_timestamp, datetime):
+                    continue
+                if search_lower in entry_content.lower():
+                    time_diff = now - entry_timestamp
+                    minutes = int(time_diff.total_seconds() / 60)
+
+                    if minutes < 1:
+                        return "You said that just now!"
+                    elif minutes == 1:
+                        return "You said that about a minute ago."
+                    elif minutes < 60:
+                        return f"You said that about {minutes} minutes ago."
+                    else:
+                        hours = minutes // 60
+                        if hours == 1:
+                            return "You said that about an hour ago."
+                        else:
+                            return f"You said that about {hours} hours ago."
+
+            return "I couldn't find when you mentioned that. Would you like me to list your recent history?"
+
+        elif query_type == "content_check" and search_content:
+            # Check if user mentioned something
+            search_lower = search_content.lower()
+            for entry in reversed(entries):
+                entry_content = str(entry["content"])
+                entry_timestamp = entry["timestamp"]
+                if not isinstance(entry_timestamp, datetime):
+                    continue
+                if search_lower in entry_content.lower():
+                    time_diff = datetime.now() - entry_timestamp
+                    minutes = int(time_diff.total_seconds() / 60)
+                    time_str = f"{minutes} minutes ago" if minutes > 1 else "just now"
+                    return f"Yes! You mentioned that {time_str}."
+
+            return "I don't see that in your recent history."
+
         else:
-            # Recent - last 10 interactions
-            if not self._interaction_logger or not self._interaction_logger.storage:
-                return "I don't have conversation history available."
-            interactions = self._interaction_logger.storage.get_recent(limit=10)
-            if not interactions:
-                return "I don't have any recent conversation history."
+            # Default: list recent history
+            from datetime import date as dt_date
 
-            lines = ["Here are your recent questions:"]
-            for i, interaction in enumerate(interactions[:5], 1):
-                lines.append(f"  {i}. {interaction.transcript}")
+            today = dt_date.today()
 
-            return " ".join(lines)
+            # Filter entries with valid timestamps
+            def get_entry_date(e: dict[str, datetime | str]) -> dt_date | None:
+                ts = e.get("timestamp")
+                if isinstance(ts, datetime):
+                    return ts.date()
+                return None
 
-        # Query by date range
-        if not self._interaction_logger or not self._interaction_logger.storage:
-            return "I don't have conversation history available."
-        storage = self._interaction_logger.storage
-        interactions = storage.get_by_date_range(start, end)  # type: ignore[attr-defined]
-
-        if not interactions:
             if time_ref == "yesterday":
-                return "You didn't ask me anything yesterday."
+                yesterday = today - timedelta(days=1)
+                filtered = [e for e in entries if get_entry_date(e) == yesterday]
+                if not filtered:
+                    return "You didn't ask me anything yesterday."
+                prefix = "Here's what you asked me yesterday:"
+            elif time_ref == "today":
+                filtered = [e for e in entries if get_entry_date(e) == today]
+                if not filtered:
+                    return "You haven't asked me anything today yet."
+                prefix = "Here's what you asked me today:"
             else:
-                return "I don't have any interactions recorded for today."
+                # Recent - last 5 interactions
+                filtered = entries[-5:]
+                prefix = "Here are your recent interactions:"
 
-        lines = [f"Here's what you asked me {time_ref}:"]
-        for i, interaction in enumerate(interactions[:5], 1):
-            lines.append(f"  {i}. {interaction.transcript}")
+            result_lines = [prefix]
+            for i, entry in enumerate(filtered[-5:], 1):
+                content = str(entry.get("content", ""))
+                if len(content) > 50:
+                    content = content[:47] + "..."
+                result_lines.append(f"  {i}. {content}")
 
-        return " ".join(lines)
+            return " ".join(result_lines)
 
     def _handle_web_search(self, intent: Intent) -> str:
         """Handle web search intent.
 
         Performs a web search using Tavily and returns results.
+        Prefixes responses with source attribution to distinguish
+        from LLM-generated content.
 
         Args:
             intent: Classified web search intent.
 
         Returns:
-            Response text with search results.
+            Response text with search results and source attribution.
         """
-        query = intent.entities.get("query", intent.raw_text)
-        logger.info(f"Web search query: {query}")
+        # Use the full raw text as the search query to preserve context
+        # The entities["query"] often only captures a part (like location)
+        # but we want the full context like "latest news in Austin"
+        query = intent.raw_text.strip()
+
+        # Clean up the query - remove trailing punctuation for better search
+        query = query.rstrip("?!.")
+
+        search_client_type = type(self._search_client).__name__
+        logger.info(f"Web search query: '{query}' (client: {search_client_type})")
 
         try:
             # Use Tavily for search
             result = self._search_client.search(query, max_results=3, include_answer=True)
 
             if not result.success:
-                logger.warning(f"Search failed: {result.error}")
+                logger.warning(f"Search failed (client: {search_client_type}): {result.error}")
                 if self._llm is None:
                     return "I couldn't search for that right now."
                 # Fall back to LLM
+                logger.info("Falling back to LLM for response")
                 llm_response = self._llm.generate(intent.raw_text)
                 return llm_response.text.strip()
+
+            # Log what we got back
+            logger.info(
+                f"Search result: success={result.success}, "
+                f"has_answer={bool(result.answer)}, "
+                f"num_results={len(result.results)}"
+            )
+
+            # Build source attribution prefix
+            today = datetime.now().strftime("%B %d, %Y")
+            greeting = f"{self._user_name}, " if self._user_name else ""
+
+            # Check if this is a news-related query
+            query_lower = query.lower()
+            is_news_query = any(
+                word in query_lower
+                for word in ["news", "latest", "recent", "happening", "headlines"]
+            )
 
             # If we have a direct answer, use it
             if result.answer:
                 # For voice, keep it concise
                 answer = result.answer
                 # Truncate if too long for voice
-                if len(answer) > 300:
-                    answer = answer[:297] + "..."
-                greeting = f"{self._user_name}, " if self._user_name else ""
-                return f"{greeting}{answer}"
+                if len(answer) > 250:
+                    answer = answer[:247] + "..."
 
-            # Otherwise, summarize the results
+                # Build natural response - no awkward "according to web search" prefix
+                # Just include greeting and date context for news queries
+                if is_news_query:
+                    prefix = f"{greeting}as of {today}, "
+                elif greeting:
+                    prefix = f"{greeting}"
+                else:
+                    prefix = ""
+
+                logger.debug(f"Returning search answer: {answer[:50]}...")
+                return f"{prefix}{answer}"
+
+            # Otherwise, summarize the results with source info
             if result.results:
                 summaries = []
+                sources = []
                 for r in result.results[:3]:
                     content = r.get("content", "")
+                    title = r.get("title", "")
                     if content:
-                        # Take first ~100 chars of each result
-                        summaries.append(content[:100])
+                        # Take first ~80 chars of each result
+                        summaries.append(content[:80])
+                    if title:
+                        sources.append(title)
 
                 if summaries:
                     combined = " ".join(summaries)
-                    if len(combined) > 300:
-                        combined = combined[:297] + "..."
-                    greeting = (
-                        f"{self._user_name}, here's what I found: "
-                        if self._user_name
-                        else "Here's what I found: "
-                    )
-                    return f"{greeting}{combined}"
+                    if len(combined) > 250:
+                        combined = combined[:247] + "..."
 
+                    # Build natural response - no awkward prefix
+                    if is_news_query:
+                        prefix = f"{greeting}as of {today}, "
+                    elif greeting:
+                        prefix = f"{greeting}"
+                    else:
+                        prefix = ""
+
+                    return f"{prefix}{combined}"
+
+            logger.warning("Search succeeded but no answer or results returned")
             return "I searched but couldn't find relevant information."
 
         except Exception as e:
-            logger.error(f"Web search failed: {e}")
+            logger.error(f"Web search exception (client: {search_client_type}): {e}")
             if self._llm is None:
                 return "I encountered an error while searching."
             # Fall back to LLM
+            logger.info("Falling back to LLM due to exception")
             llm_response = self._llm.generate(intent.raw_text)
             return llm_response.text.strip()
 
@@ -884,9 +1053,18 @@ class Orchestrator:
             Response text confirming the name change.
         """
         name = intent.entities.get("name", "")
+        password = intent.entities.get("password", "")
 
         if not name:
             return "What should I call you?"
+
+        # Check if profile is password protected
+        if self._user_profile.is_password_protected:
+            if not password:
+                return "Your profile is password protected. Please say your password to change your name."
+
+            if not self._user_profile.verify_password(password):
+                return "That password doesn't match. Please try again with the correct password."
 
         # Update the profile
         self._user_profile.name = name
@@ -899,6 +1077,31 @@ class Orchestrator:
 
         logger.info(f"User name set to: {name}")
         return f"Got it, {name}! I'll use your name from now on."
+
+    def _handle_user_password_set(self, intent: Intent) -> str:
+        """Handle user password set intent.
+
+        Args:
+            intent: Classified password set intent.
+
+        Returns:
+            Response text confirming password was set.
+        """
+        password = intent.entities.get("password", "")
+
+        if not password:
+            return "What password would you like to use?"
+
+        # Set the password
+        self._user_profile.set_password(password)
+
+        # Save to disk
+        from ..config.user_profile import save_user_profile
+
+        save_user_profile(self._user_profile)
+
+        logger.info("User password set")
+        return "Password set! I'll require it before changing your name."
 
     def _handle_time_query(self) -> str:
         """Handle time query intent by returning the actual system time.
@@ -1349,6 +1552,62 @@ class Orchestrator:
             self._capture.stop()
 
         return audio_buffer
+
+    def _record_follow_up(self, timeout_ms: int = 5000) -> bytes:
+        """Record follow-up speech for a limited time.
+
+        This is used after a response ends with a question to capture
+        the user's follow-up without requiring a wake word.
+
+        Args:
+            timeout_ms: Maximum time to wait for speech (default 5 seconds)
+
+        Returns:
+            Recorded audio bytes, or empty if no speech detected
+        """
+        if not self._capture:
+            return b""
+
+        audio_buffer = b""
+        silence_start: float | None = None
+        recording_start = time.time()
+        speech_detected = False
+
+        # Small delay to avoid PyAudio segfault from rapid stop/start
+        time.sleep(0.1)
+        self._capture.start()
+
+        try:
+            for chunk in self._capture.stream():
+                audio_buffer += chunk.data
+
+                # Check for silence (simple energy-based detection)
+                energy = self._calculate_energy(chunk.data)
+                is_silence = energy < 500  # Threshold
+
+                if not is_silence:
+                    speech_detected = True
+                    silence_start = None
+                elif speech_detected:
+                    # Only track silence after speech has been detected
+                    if silence_start is None:
+                        silence_start = time.time()
+                    elif (time.time() - silence_start) * 1000 > self._silence_timeout_ms:
+                        logger.debug("Follow-up silence detected, stopping")
+                        break
+
+                # Check timeout
+                if (time.time() - recording_start) * 1000 > timeout_ms:
+                    logger.debug("Follow-up timeout reached")
+                    break
+
+        finally:
+            self._capture.stop()
+
+        # Only return audio if speech was detected
+        if speech_detected:
+            return audio_buffer
+        return b""
 
     def _calculate_energy(self, audio_data: bytes) -> float:
         """Calculate audio energy for silence detection."""

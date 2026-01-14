@@ -33,8 +33,9 @@ class TestE2ELatency:
         # Configure mocks
         wake_word.initialize(keywords=["ara"], sensitivity=0.5)
         wake_word.schedule_detection(at_chunk=0, confidence=0.9)
-        transcriber.set_response("what time is it")
-        llm.set_response("It's 3:30 in the afternoon.")
+        # Use a general question that goes to LLM, not a time query (which bypasses LLM)
+        transcriber.set_response("tell me a fun fact")
+        llm.set_response("Octopuses have three hearts!")
 
         # Remove artificial latencies
         transcriber.set_latency(0)
@@ -44,7 +45,7 @@ class TestE2ELatency:
         # Set audio source for capture
         capture.set_audio_data(bytes(16000 * 2 * 2))  # 2 seconds of audio
 
-        return Orchestrator(
+        orch = Orchestrator(
             audio_capture=capture,
             audio_playback=playback,
             wake_word_detector=wake_word,
@@ -53,6 +54,9 @@ class TestE2ELatency:
             synthesizer=synthesizer,
             feedback=feedback,
         )
+        # Clear any stored user name to prevent test pollution
+        orch._user_name = None
+        return orch
 
     @pytest.mark.benchmark
     def test_full_interaction_latency(self, benchmark, mock_orchestrator: Orchestrator) -> None:
@@ -67,8 +71,8 @@ class TestE2ELatency:
         result = benchmark(run_interaction)
 
         assert result is not None
-        assert result.transcript == "what time is it"
-        assert "3:30" in result.response_text
+        assert result.transcript == "tell me a fun fact"
+        assert "Octopuses" in result.response_text or "hearts" in result.response_text
 
     @pytest.mark.benchmark
     def test_pipeline_stage_breakdown(self, mock_orchestrator: Orchestrator) -> None:
