@@ -225,7 +225,7 @@
 
 - [x] T063 Update voice command reference documentation in ara-voice-assistant-pi4-setup.md
 - [x] T064 Run all tests and verify passing
-- [ ] T065 Run quickstart.md validation scenarios
+- [x] T065 Run quickstart.md validation scenarios
 - [x] T066 Code cleanup and lint check with ruff
 
 ---
