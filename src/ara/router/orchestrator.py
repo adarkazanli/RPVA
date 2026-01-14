@@ -967,10 +967,10 @@ class Orchestrator:
 
     def _on_reminder_trigger(self, reminder: "Reminder") -> None:
         """Callback when a reminder triggers."""
-        # Skip if this reminder was already handled by countdown
+        # Skip if this reminder is being handled by countdown
+        # Don't delete the entry - let the countdown finish first
         if reminder.id in self._countdown_active:
-            logger.debug(f"Reminder {reminder.id} already handled by countdown")
-            del self._countdown_active[reminder.id]
+            logger.debug(f"Reminder {reminder.id} being handled by countdown, skipping callback")
             return
 
         logger.info(f"Reminder triggered: {reminder.message}")
@@ -1141,11 +1141,10 @@ class Orchestrator:
 
         finally:
             self._countdown_in_progress = False
-            # Clean up tracking for completed countdown
+            # Clean up tracking entries now that countdown is complete
             for reminder in reminders:
                 if reminder.id in self._countdown_active:
-                    # Keep the entry so _on_reminder_trigger knows it was handled
-                    pass
+                    del self._countdown_active[reminder.id]
 
     def _generate_timer_countdown_phrase(self, timers: list[Timer], user_name: str | None) -> str:
         """Generate the countdown announcement phrase for timers.
