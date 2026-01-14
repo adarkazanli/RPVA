@@ -181,6 +181,9 @@ class ConfigLoader(Protocol):
         ...
 
 
+# Import user profile after class definitions to avoid circular imports
+from .user_profile import UserProfile, load_user_profile, save_user_profile
+
 # Public API
 __all__ = [
     "AraConfig",
@@ -197,5 +200,8 @@ __all__ = [
     "STTConfig",
     "TTSConfig",
     "TestingConfig",
+    "UserProfile",
     "WakeWordConfig",
+    "load_user_profile",
+    "save_user_profile",
 ]

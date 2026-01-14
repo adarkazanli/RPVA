@@ -22,6 +22,7 @@ class IntentType(Enum):
     HISTORY_QUERY = "history_query"
     WEB_SEARCH = "web_search"
     SYSTEM_COMMAND = "system_command"
+    USER_NAME_SET = "user_name_set"
     UNKNOWN = "unknown"
 
 
@@ -125,6 +126,14 @@ class IntentClassifier:
         (r"status", "status"),
     ]
 
+    # User name set patterns
+    USER_NAME_SET_PATTERNS = [
+        r"my\s+name\s+is\s+(\w+)",
+        r"call\s+me\s+(\w+)",
+        r"set\s+my\s+name\s+to\s+(\w+)",
+        r"i'?m\s+(\w+)",  # Handle contractions like "I'm Ammar"
+    ]
+
     def __init__(self) -> None:
         """Initialize the classifier."""
         # Pre-compile patterns for efficiency
@@ -154,6 +163,9 @@ class IntentClassifier:
             re.compile(p, re.IGNORECASE) for p in self.WEB_SEARCH_PATTERNS
         ]
         self._system = [(re.compile(p, re.IGNORECASE), cmd) for p, cmd in self.SYSTEM_PATTERNS]
+        self._user_name_set = [
+            re.compile(p, re.IGNORECASE) for p in self.USER_NAME_SET_PATTERNS
+        ]
 
     def classify(self, text: str) -> Intent:
         """Classify the given text into an intent.
@@ -203,6 +215,10 @@ class IntentClassifier:
 
         # System commands
         if intent := self._try_system_command(text):
+            return intent
+
+        # User name set
+        if intent := self._try_user_name_set(text):
             return intent
 
         # Default to general question
@@ -379,6 +395,28 @@ class IntentClassifier:
                     type=IntentType.SYSTEM_COMMAND,
                     confidence=0.95,
                     entities={"command": command},
+                    raw_text=text,
+                )
+        return None
+
+    def _try_user_name_set(self, text: str) -> Intent | None:
+        """Try to match user name set patterns."""
+        for pattern in self._user_name_set:
+            match = pattern.search(text)
+            if match:
+                entities = {}
+                groups = match.groups()
+
+                # Extract the name from the match
+                if groups and groups[0]:
+                    name = groups[0].strip()
+                    # Capitalize first letter
+                    entities["name"] = name.capitalize()
+
+                return Intent(
+                    type=IntentType.USER_NAME_SET,
+                    confidence=0.9,
+                    entities=entities,
                     raw_text=text,
                 )
         return None

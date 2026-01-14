@@ -37,8 +37,9 @@ class TestSystemPromptApplication:
         personality = get_default_personality()
 
         assert "warm" in personality.system_prompt.lower()
-        assert "playful" in personality.system_prompt.lower()
-        assert "witty" in personality.system_prompt.lower() or "wit" in personality.system_prompt.lower()
+        # Updated for concise tone (003-timer-countdown): now emphasizes brief/clear over playful/witty
+        assert "brief" in personality.system_prompt.lower() or "concise" in personality.system_prompt.lower()
+        assert "clear" in personality.system_prompt.lower() or "direct" in personality.system_prompt.lower()
 
     def test_system_prompt_contains_voice_assistant_guidance(self) -> None:
         """Test that system prompt includes voice assistant context."""
@@ -167,5 +168,6 @@ class TestPersonalityConfigStructure:
 
         assert personality.name == "Purcobine"
         assert personality.warmth_level == "friendly"
-        assert personality.wit_enabled is True
+        # Updated for concise tone (003-timer-countdown): wit_enabled is now False
+        assert personality.wit_enabled is False
         assert len(personality.system_prompt) > 100  # Should be substantial
