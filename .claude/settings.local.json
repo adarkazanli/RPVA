@@ -15,7 +15,9 @@
       "Bash(git commit:*)",
       "Bash(ruff format:*)",
       "Bash(python -m mypy:*)",
-      "Bash(pip show:*)"
+      "Bash(pip show:*)",
+      "Bash(git stash:*)",
+      "Bash(git checkout:*)"
     ]
   }
 }
