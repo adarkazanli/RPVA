@@ -910,41 +910,51 @@ class Orchestrator:
 
     def _handle_history_query(self, intent: Intent) -> str:
         """Handle history query intent."""
-        # Read from the interaction log file directly
-        log_file = _INTERACTION_LOG_FILE
-
-        if not log_file.exists():
-            return "I don't have any conversation history yet."
-
-        try:
-            with open(log_file) as f:
-                lines = f.readlines()
-        except Exception as e:
-            logger.error(f"Failed to read interaction log: {e}")
-            return "I couldn't access the conversation history."
-
-        if not lines:
-            return "I don't have any conversation history yet."
+        from datetime import UTC
 
         query_type = intent.entities.get("query_type", "list")
         search_content = intent.entities.get("search_content", "")
         time_ref = intent.entities.get("time_ref", "recent")
 
-        # Parse the log entries - each entry has timestamp (datetime) and content (str)
+        # Try MongoDB first (preferred)
         entries: list[dict[str, datetime | str]] = []
-        for line in lines:
-            # Format: "2026-01-14 10:32:18: Voice agent captured -> "text""
-            if "captured ->" in line:
+        if self._interaction_storage is not None:
+            try:
+                # Query recent interactions from MongoDB
+                collection = self._interaction_storage.interactions._collection  # type: ignore
+                docs = list(collection.find().sort("timestamp", -1).limit(100))
+                for doc in docs:
+                    ts = doc.get("timestamp")
+                    # Ensure timezone awareness
+                    if ts and ts.tzinfo is None:
+                        ts = ts.replace(tzinfo=UTC)
+                    transcript = doc.get("input", {}).get("transcript", "")
+                    if ts and transcript:
+                        entries.append({"timestamp": ts, "content": transcript})
+                logger.debug(f"Loaded {len(entries)} entries from MongoDB")
+            except Exception as e:
+                logger.warning(f"Failed to query MongoDB for history: {e}")
+
+        # Fall back to text file if MongoDB not available or empty
+        if not entries:
+            log_file = _INTERACTION_LOG_FILE
+            if log_file.exists():
                 try:
-                    # Extract timestamp and content
-                    timestamp_str = (
-                        line.split(":")[0] + ":" + line.split(":")[1] + ":" + line.split(":")[2]
-                    )
-                    timestamp = datetime.strptime(timestamp_str.strip(), "%Y-%m-%d %H:%M:%S")
-                    content = line.split('-> "')[1].rstrip('"\n')
-                    entries.append({"timestamp": timestamp, "content": content})
-                except (IndexError, ValueError):
-                    continue
+                    with open(log_file) as f:
+                        lines = f.readlines()
+                    for line in lines:
+                        if "captured ->" in line:
+                            try:
+                                timestamp_str = (
+                                    line.split(":")[0] + ":" + line.split(":")[1] + ":" + line.split(":")[2]
+                                )
+                                timestamp = datetime.strptime(timestamp_str.strip(), "%Y-%m-%d %H:%M:%S")
+                                content = line.split('-> "')[1].rstrip('"\n')
+                                entries.append({"timestamp": timestamp, "content": content})
+                            except (IndexError, ValueError):
+                                continue
+                except Exception as e:
+                    logger.error(f"Failed to read interaction log: {e}")
 
         if not entries:
             return "I don't have any conversation history yet."
@@ -999,14 +1009,21 @@ class Orchestrator:
         # Handle different query types
         if query_type == "time_since" and search_content:
             # Search for content and calculate time since
-            now = datetime.now()
+            now = datetime.now(UTC)
 
-            for entry in reversed(entries):  # Search from most recent
+            # Entries from MongoDB are already sorted most-recent-first
+            for entry in entries:
                 entry_content = str(entry["content"])
                 entry_timestamp = entry["timestamp"]
                 if not isinstance(entry_timestamp, datetime):
                     continue
+                # Skip the current query itself (avoid matching "asked about X" with itself)
+                if "asked" in entry_content.lower() and search_content.lower()[:20] in entry_content.lower():
+                    continue
                 if fuzzy_match(search_content, entry_content):
+                    # Ensure timezone awareness for comparison
+                    if entry_timestamp.tzinfo is None:
+                        entry_timestamp = entry_timestamp.replace(tzinfo=UTC)
                     time_diff = now - entry_timestamp
                     minutes = int(time_diff.total_seconds() / 60)
 
@@ -1027,13 +1044,16 @@ class Orchestrator:
 
         elif query_type == "content_check" and search_content:
             # Check if user mentioned something
-            for entry in reversed(entries):
+            now = datetime.now(UTC)
+            for entry in entries:  # Already sorted most-recent-first
                 entry_content = str(entry["content"])
                 entry_timestamp = entry["timestamp"]
                 if not isinstance(entry_timestamp, datetime):
                     continue
                 if fuzzy_match(search_content, entry_content):
-                    time_diff = datetime.now() - entry_timestamp
+                    if entry_timestamp.tzinfo is None:
+                        entry_timestamp = entry_timestamp.replace(tzinfo=UTC)
+                    time_diff = now - entry_timestamp
                     minutes = int(time_diff.total_seconds() / 60)
                     time_str = f"{minutes} minutes ago" if minutes > 1 else "just now"
                     return f"Yes! You mentioned that {time_str}."
