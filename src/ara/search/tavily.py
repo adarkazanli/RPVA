@@ -219,11 +219,19 @@ def create_search_client(
     Returns:
         Search client instance
     """
+    import os
+
+    logger.info(f"Creating search client (use_mock={use_mock})")
+    logger.info(f"TAVILY_API_KEY set: {bool(os.environ.get('TAVILY_API_KEY'))}")
+
     if use_mock:
+        logger.info("Using mock search client (explicitly requested)")
         return MockTavilySearch(api_key=api_key)
 
     try:
-        return TavilySearch(api_key=api_key)
+        client = TavilySearch(api_key=api_key)
+        logger.info("Created real TavilySearch client")
+        return client
     except RuntimeError as e:
         logger.warning(f"Could not create Tavily client: {e}")
         logger.warning("Falling back to mock search client")
