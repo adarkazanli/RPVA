@@ -422,7 +422,7 @@ class Orchestrator:
                 f"TTS:{latencies['tts_ms']}ms)"
             )
 
-            # Log the interaction
+            # Log the interaction to file logger
             if self._interaction_logger:
                 latencies["total"] = total_latency
                 self._interaction_logger.log(
@@ -432,6 +432,31 @@ class Orchestrator:
                     latency_ms=latencies,
                     entities=intent.entities,
                 )
+
+            # Log interaction to MongoDB
+            if self._interaction_storage is not None:
+                try:
+                    from datetime import UTC, datetime
+
+                    from ..storage.models import InteractionDTO
+
+                    mongo_interaction = InteractionDTO(
+                        session_id=str(interaction_id),
+                        timestamp=datetime.now(UTC),
+                        device_id="voice-agent",
+                        transcript=transcript,
+                        transcript_confidence=transcript_result.confidence if hasattr(transcript_result, 'confidence') else 1.0,
+                        intent_type=intent.type.value,
+                        intent_confidence=intent.confidence,
+                        response_text=response_text,
+                        response_source="local",
+                        latency_ms=latencies,
+                        entities=intent.entities,
+                    )
+                    self._interaction_storage.interactions.save(mongo_interaction)  # type: ignore
+                    logger.debug("Interaction saved to MongoDB")
+                except Exception as e:
+                    logger.warning(f"Failed to log interaction to MongoDB: {e}")
 
             return InteractionResult(
                 transcript=transcript,
