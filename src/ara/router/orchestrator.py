@@ -869,11 +869,17 @@ class Orchestrator:
 
     def _on_timer_expire(self, timer: "Timer") -> None:
         """Callback when a timer expires."""
+        # Skip if this timer was already handled by countdown
+        if timer.id in self._countdown_active:
+            logger.debug(f"Timer {timer.id} already handled by countdown")
+            del self._countdown_active[timer.id]
+            return
+
         logger.info(f"Timer expired: {timer.name or 'unnamed'}")
         if self._feedback:
             self._feedback.play(FeedbackType.TIMER_ALERT)
 
-        # Optionally announce the timer
+        # Announce the timer
         if timer.name:
             message = f"Your timer '{timer.name}' has finished."
         else:
@@ -944,6 +950,30 @@ class Orchestrator:
                 upcoming.append(reminder)
 
         return sorted(upcoming, key=lambda r: r.remind_at)
+
+    def _get_upcoming_timers(self, seconds: int) -> list[Timer]:
+        """Find timers that will expire within the given time window.
+
+        Args:
+            seconds: Time window in seconds.
+
+        Returns:
+            List of timers within the window, excluding those already in countdown.
+        """
+        now = datetime.now(UTC)
+        window_end = now + timedelta(seconds=seconds)
+
+        upcoming = []
+        for timer in self._timer_manager.list_active():
+            # Skip if already in countdown
+            if timer.id in self._countdown_active:
+                continue
+
+            # Check if within window
+            if now <= timer.expires_at <= window_end:
+                upcoming.append(timer)
+
+        return sorted(upcoming, key=lambda t: t.expires_at)
 
     def _generate_countdown_phrase(self, reminders: list[Reminder], user_name: str | None) -> str:
         """Generate the countdown announcement phrase.
@@ -1043,6 +1073,105 @@ class Orchestrator:
                 if reminder.id in self._countdown_active:
                     # Keep the entry so _on_reminder_trigger knows it was handled
                     pass
+
+    def _generate_timer_countdown_phrase(self, timers: list[Timer], user_name: str | None) -> str:
+        """Generate the countdown announcement phrase for timers.
+
+        Args:
+            timers: List of timers to announce.
+            user_name: User's name or None for generic greeting.
+
+        Returns:
+            Countdown phrase like "Ammar, your timer ends in"
+        """
+        # Use name or fallback to generic greeting
+        greeting = user_name if user_name else "Hey"
+
+        if len(timers) == 1:
+            timer = timers[0]
+            if timer.name:
+                return f"{greeting}, your {timer.name} timer ends in"
+            return f"{greeting}, your timer ends in"
+        else:
+            return f"{greeting}, your timers end in"
+
+    def _start_timer_countdown(self, timers: list[Timer]) -> None:
+        """Start the countdown announcement for the given timers.
+
+        Args:
+            timers: Timers to count down for.
+        """
+        if not timers or not self._synthesizer or not self._playback:
+            return
+
+        if self._countdown_in_progress:
+            logger.debug("Countdown already in progress, skipping")
+            return
+
+        self._countdown_in_progress = True
+
+        # Mark all timers as being counted down
+        for timer in timers:
+            self._countdown_active[timer.id] = True
+
+        try:
+            # Calculate starting number based on first timer
+            now = datetime.now(UTC)
+            first_timer = timers[0]
+            remaining = (first_timer.expires_at - now).total_seconds()
+            start_number = self._get_countdown_start(remaining)
+
+            # Generate and speak the intro phrase
+            intro = self._generate_timer_countdown_phrase(timers, self._user_name)
+            logger.info(f"Starting timer countdown: {intro} {start_number}...")
+
+            # Speak intro with first number
+            try:
+                intro_text = f"{intro} {start_number}"
+                synthesis_result = self._synthesizer.synthesize(intro_text)
+                self._playback.play(synthesis_result.audio, synthesis_result.sample_rate)
+            except Exception as e:
+                logger.error(f"Failed to synthesize timer countdown intro: {e}")
+                return
+
+            # Count down from start_number-1 to 1
+            for num in range(start_number - 1, 0, -1):
+                # Check if any timer was cancelled
+                if not any(self._countdown_active.get(t.id, False) for t in timers):
+                    logger.info("Timer countdown cancelled")
+                    return
+
+                # Wait for the interval
+                time.sleep(self._countdown_interval)
+
+                # Speak the number
+                try:
+                    synthesis_result = self._synthesizer.synthesize(str(num))
+                    self._playback.play(synthesis_result.audio, synthesis_result.sample_rate)
+                except Exception as e:
+                    logger.error(f"Failed to synthesize countdown number {num}: {e}")
+
+            # Final wait and announcement
+            if any(self._countdown_active.get(t.id, False) for t in timers):
+                time.sleep(self._countdown_interval)
+                try:
+                    # Announce timer completion
+                    if len(timers) == 1 and timers[0].name:
+                        message = f"Your {timers[0].name} timer is done!"
+                    else:
+                        message = "Your timer is done!"
+                    synthesis_result = self._synthesizer.synthesize(message)
+                    self._playback.play(synthesis_result.audio, synthesis_result.sample_rate)
+                except Exception as e:
+                    logger.error(f"Failed to synthesize timer completion: {e}")
+
+                # Play the timer alert
+                if self._feedback:
+                    self._feedback.play(FeedbackType.TIMER_ALERT)
+
+        finally:
+            self._countdown_in_progress = False
+            # Keep the entries so _on_timer_expire knows they were handled
 
     def _wait_for_wake_word(self) -> bool:
         """Wait for wake word detection.
@@ -1193,17 +1322,29 @@ class Orchestrator:
         """Background thread to check for expired timers and due reminders."""
         while self._running:
             try:
-                # Check for expired timers
+                # Check for upcoming timers that need countdown (5-second window)
+                if not self._countdown_in_progress:
+                    upcoming_timers = self._get_upcoming_timers(5)
+                    if upcoming_timers:
+                        # Start countdown in a separate thread to not block
+                        countdown_thread = threading.Thread(
+                            target=self._start_timer_countdown,
+                            args=(upcoming_timers,),
+                            daemon=True,
+                        )
+                        countdown_thread.start()
+
+                # Check for expired timers (for any not handled by countdown)
                 self._timer_manager.check_expired()
 
                 # Check for upcoming reminders that need countdown (5-second window)
                 if not self._countdown_in_progress:
-                    upcoming = self._get_upcoming_reminders(5)
-                    if upcoming:
+                    upcoming_reminders = self._get_upcoming_reminders(5)
+                    if upcoming_reminders:
                         # Start countdown in a separate thread to not block
                         countdown_thread = threading.Thread(
                             target=self._start_countdown,
-                            args=(upcoming,),
+                            args=(upcoming_reminders,),
                             daemon=True,
                         )
                         countdown_thread.start()
