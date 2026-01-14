@@ -1,6 +1,5 @@
 """Unit tests for ordinal number generation (T024)."""
 
-
 from ara.router.orchestrator import _get_ordinal
 
 

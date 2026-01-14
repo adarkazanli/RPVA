@@ -61,9 +61,7 @@ class TestSQLiteStorage:
         result = storage.get(uuid.uuid4())
         assert result is None
 
-    def test_get_by_session(
-        self, storage: SQLiteStorage, sample_interaction: Interaction
-    ) -> None:
+    def test_get_by_session(self, storage: SQLiteStorage, sample_interaction: Interaction) -> None:
         """Test getting interactions by session."""
         # Save multiple interactions in same session
         session_id = sample_interaction.session_id
@@ -105,9 +103,7 @@ class TestSQLiteStorage:
         results = storage.get_by_date_range(start, end)
         assert len(results) >= 1
 
-    def test_get_by_device(
-        self, storage: SQLiteStorage, sample_interaction: Interaction
-    ) -> None:
+    def test_get_by_device(self, storage: SQLiteStorage, sample_interaction: Interaction) -> None:
         """Test getting interactions by device."""
         storage.save(sample_interaction)
 
@@ -115,9 +111,7 @@ class TestSQLiteStorage:
         assert len(results) >= 1
         assert all(r.device_id == "test-device" for r in results)
 
-    def test_get_recent(
-        self, storage: SQLiteStorage
-    ) -> None:
+    def test_get_recent(self, storage: SQLiteStorage) -> None:
         """Test getting recent interactions."""
         session_id = uuid.uuid4()
 
@@ -145,9 +139,7 @@ class TestSQLiteStorage:
         recent = storage.get_recent(limit=5)
         assert len(recent) == 5
 
-    def test_count_by_date(
-        self, storage: SQLiteStorage, sample_interaction: Interaction
-    ) -> None:
+    def test_count_by_date(self, storage: SQLiteStorage, sample_interaction: Interaction) -> None:
         """Test counting interactions by date."""
         storage.save(sample_interaction)
 
@@ -155,13 +147,17 @@ class TestSQLiteStorage:
         count = storage.count_by_date(today)
         assert count >= 1
 
-    def test_get_intent_counts(
-        self, storage: SQLiteStorage
-    ) -> None:
+    def test_get_intent_counts(self, storage: SQLiteStorage) -> None:
         """Test getting intent counts."""
         session_id = uuid.uuid4()
 
-        intents = ["general_question", "timer_set", "general_question", "timer_set", "general_question"]
+        intents = [
+            "general_question",
+            "timer_set",
+            "general_question",
+            "timer_set",
+            "general_question",
+        ]
         for i, intent in enumerate(intents):
             interaction = Interaction(
                 id=uuid.uuid4(),
@@ -189,9 +185,7 @@ class TestSQLiteStorage:
         assert counts.get("general_question", 0) >= 3
         assert counts.get("timer_set", 0) >= 2
 
-    def test_get_average_latency(
-        self, storage: SQLiteStorage
-    ) -> None:
+    def test_get_average_latency(self, storage: SQLiteStorage) -> None:
         """Test getting average latency."""
         session_id = uuid.uuid4()
 
@@ -258,9 +252,7 @@ class TestJSONLWriter:
             error=None,
         )
 
-    def test_write_interaction(
-        self, writer: JSONLWriter, sample_interaction: Interaction
-    ) -> None:
+    def test_write_interaction(self, writer: JSONLWriter, sample_interaction: Interaction) -> None:
         """Test writing an interaction to JSONL."""
         writer.write(sample_interaction)
 
@@ -304,9 +296,7 @@ class TestJSONLWriter:
 
         assert len(lines) == 2
 
-    def test_read_interactions(
-        self, writer: JSONLWriter, sample_interaction: Interaction
-    ) -> None:
+    def test_read_interactions(self, writer: JSONLWriter, sample_interaction: Interaction) -> None:
         """Test reading interactions from JSONL."""
         writer.write(sample_interaction)
 
@@ -323,9 +313,7 @@ class TestJSONLWriter:
         interactions = writer.read(date(2020, 1, 1))
         assert interactions == []
 
-    def test_json_format_valid(
-        self, writer: JSONLWriter, sample_interaction: Interaction
-    ) -> None:
+    def test_json_format_valid(self, writer: JSONLWriter, sample_interaction: Interaction) -> None:
         """Test that written JSON is valid."""
         writer.write(sample_interaction)
 

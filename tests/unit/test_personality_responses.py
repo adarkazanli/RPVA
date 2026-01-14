@@ -3,8 +3,6 @@
 Tests that assistant responses are friendly but brief, without excessive verbosity.
 """
 
-import pytest
-
 from ara.config.personality import get_default_personality
 
 
@@ -18,8 +16,7 @@ class TestConciseReminderConfirmation:
 
         # Should emphasize brief/concise responses
         assert any(
-            word in prompt
-            for word in ["brief", "concise", "short", "one sentence", "minimal"]
+            word in prompt for word in ["brief", "concise", "short", "one sentence", "minimal"]
         ), "Personality prompt should emphasize brevity"
 
     def test_personality_prompt_discourages_filler(self):

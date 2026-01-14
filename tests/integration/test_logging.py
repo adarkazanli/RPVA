@@ -28,7 +28,7 @@ class TestLoggingIntegration:
         )
 
     @pytest.fixture
-    def logger(self, tmp_path, storage: InteractionStorage) -> InteractionLogger:
+    def logger(self, tmp_path, storage: InteractionStorage) -> InteractionLogger:  # noqa: ARG002
         """Create logger instance."""
         return InteractionLogger(
             device_id="test-device",
@@ -115,14 +115,16 @@ class TestLoggingIntegration:
         assert logger.current_session.interaction_count >= 1
 
     def test_error_logged(
-        self, orchestrator: Orchestrator, storage: InteractionStorage
+        self,
+        orchestrator: Orchestrator,
+        storage: InteractionStorage,  # noqa: ARG002
     ) -> None:
         """Test that errors are logged."""
         orchestrator._transcriber.set_response("")  # Empty transcription
         orchestrator._wake_word.schedule_detection(at_chunk=0, confidence=0.9)
         orchestrator._capture.set_audio_data(bytes(16000 * 2))
 
-        result = orchestrator.process_single_interaction()
+        orchestrator.process_single_interaction()
 
         # Empty transcription should be handled gracefully
         # Either no interaction logged or logged with error
@@ -168,9 +170,7 @@ class TestSummaryGeneration:
 
         return storage
 
-    def test_generate_daily_summary(
-        self, storage_with_data: InteractionStorage
-    ) -> None:
+    def test_generate_daily_summary(self, storage_with_data: InteractionStorage) -> None:
         """Test generating a complete daily summary."""
         generator = SummaryGenerator(storage_with_data)
         today = date.today()
@@ -182,9 +182,7 @@ class TestSummaryGeneration:
         assert summary.error_count == 0
         assert len(summary.top_intents) > 0
 
-    def test_summary_includes_action_items(
-        self, storage_with_data: InteractionStorage
-    ) -> None:
+    def test_summary_includes_action_items(self, storage_with_data: InteractionStorage) -> None:
         """Test that summary includes action items from reminders."""
         generator = SummaryGenerator(storage_with_data)
         today = date.today()
@@ -240,9 +238,7 @@ class TestHistoryQuery:
 
         return storage
 
-    def test_query_recent_interactions(
-        self, storage_with_history: InteractionStorage
-    ) -> None:
+    def test_query_recent_interactions(self, storage_with_history: InteractionStorage) -> None:
         """Test querying recent interactions."""
         recent = storage_with_history.get_recent(limit=3)
 
@@ -250,9 +246,7 @@ class TestHistoryQuery:
         # Most recent first
         assert recent[0].transcript == "question 4"
 
-    def test_query_by_date(
-        self, storage_with_history: InteractionStorage
-    ) -> None:
+    def test_query_by_date(self, storage_with_history: InteractionStorage) -> None:
         """Test querying interactions by date."""
         today = date.today()
         interactions = storage_with_history.sqlite.get_by_date_range(
@@ -262,9 +256,7 @@ class TestHistoryQuery:
 
         assert len(interactions) == 5
 
-    def test_query_by_intent(
-        self, storage_with_history: InteractionStorage
-    ) -> None:
+    def test_query_by_intent(self, storage_with_history: InteractionStorage) -> None:
         """Test getting intent statistics."""
         today = date.today()
         counts = storage_with_history.sqlite.get_intent_counts(today)

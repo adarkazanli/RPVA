@@ -64,9 +64,7 @@ class TestSTTLatency:
         # Note: tiny model may not transcribe silence accurately
 
     @pytest.mark.benchmark
-    def test_transcription_throughput(
-        self, benchmark, mock_transcriber: MockTranscriber
-    ) -> None:
+    def test_transcription_throughput(self, benchmark, mock_transcriber: MockTranscriber) -> None:
         """Benchmark transcription throughput (calls per second)."""
         mock_transcriber.set_latency(0)
 

@@ -88,9 +88,7 @@ class ReminderManager:
         """
         self._reminders: dict[UUID, Reminder] = {}
         self._on_trigger = on_trigger
-        self._persistence_path: Path | None = (
-            Path(persistence_path) if persistence_path else None
-        )
+        self._persistence_path: Path | None = Path(persistence_path) if persistence_path else None
 
         # Load existing reminders from persistence
         if self._persistence_path:
@@ -163,10 +161,7 @@ class ReminderManager:
         Returns:
             List of pending reminders, sorted by remind_at.
         """
-        pending = [
-            r for r in self._reminders.values()
-            if r.status == ReminderStatus.PENDING
-        ]
+        pending = [r for r in self._reminders.values() if r.status == ReminderStatus.PENDING]
         return sorted(pending, key=lambda r: r.remind_at)
 
     def list_all(self) -> list[Reminder]:
@@ -448,9 +443,8 @@ def parse_reminder_time(text: str) -> datetime | None:
             result += timedelta(days=1)
 
         # Check for "tomorrow" in the text
-        if "tomorrow" in text:
-            if result.date() == now.date():
-                result += timedelta(days=1)
+        if "tomorrow" in text and result.date() == now.date():
+            result += timedelta(days=1)
 
         return result
 

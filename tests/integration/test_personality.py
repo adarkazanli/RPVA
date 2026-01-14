@@ -38,8 +38,14 @@ class TestSystemPromptApplication:
 
         assert "warm" in personality.system_prompt.lower()
         # Updated for concise tone (003-timer-countdown): now emphasizes brief/clear over playful/witty
-        assert "brief" in personality.system_prompt.lower() or "concise" in personality.system_prompt.lower()
-        assert "clear" in personality.system_prompt.lower() or "direct" in personality.system_prompt.lower()
+        assert (
+            "brief" in personality.system_prompt.lower()
+            or "concise" in personality.system_prompt.lower()
+        )
+        assert (
+            "clear" in personality.system_prompt.lower()
+            or "direct" in personality.system_prompt.lower()
+        )
 
     def test_system_prompt_contains_voice_assistant_guidance(self) -> None:
         """Test that system prompt includes voice assistant context."""
@@ -47,7 +53,10 @@ class TestSystemPromptApplication:
 
         # Should mention being a voice assistant and keeping responses concise
         assert "voice" in personality.system_prompt.lower()
-        assert "concise" in personality.system_prompt.lower() or "short" in personality.system_prompt.lower()
+        assert (
+            "concise" in personality.system_prompt.lower()
+            or "short" in personality.system_prompt.lower()
+        )
 
     def test_orchestrator_loads_personality_name(self) -> None:
         """Test that orchestrator loads the personality name."""

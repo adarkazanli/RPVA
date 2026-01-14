@@ -176,9 +176,7 @@ class SQLiteStorage:
         )
         return [self._row_to_interaction(row) for row in cursor.fetchall()]
 
-    def get_by_date_range(
-        self, start: datetime, end: datetime
-    ) -> list[Interaction]:
+    def get_by_date_range(self, start: datetime, end: datetime) -> list[Interaction]:
         """Get interactions within a date range.
 
         Args:
@@ -198,9 +196,7 @@ class SQLiteStorage:
         )
         return [self._row_to_interaction(row) for row in cursor.fetchall()]
 
-    def get_by_device(
-        self, device_id: str, limit: int = 100
-    ) -> list[Interaction]:
+    def get_by_device(self, device_id: str, limit: int = 100) -> list[Interaction]:
         """Get interactions by device.
 
         Args:
@@ -249,12 +245,8 @@ class SQLiteStorage:
         Returns:
             Number of interactions.
         """
-        start = datetime.combine(target_date, datetime.min.time()).replace(
-            tzinfo=UTC
-        )
-        end = datetime.combine(target_date, datetime.max.time()).replace(
-            tzinfo=UTC
-        )
+        start = datetime.combine(target_date, datetime.min.time()).replace(tzinfo=UTC)
+        end = datetime.combine(target_date, datetime.max.time()).replace(tzinfo=UTC)
 
         cursor = self._conn.execute(
             """
@@ -274,12 +266,8 @@ class SQLiteStorage:
         Returns:
             Dictionary of intent to count.
         """
-        start = datetime.combine(target_date, datetime.min.time()).replace(
-            tzinfo=UTC
-        )
-        end = datetime.combine(target_date, datetime.max.time()).replace(
-            tzinfo=UTC
-        )
+        start = datetime.combine(target_date, datetime.min.time()).replace(tzinfo=UTC)
+        end = datetime.combine(target_date, datetime.max.time()).replace(tzinfo=UTC)
 
         cursor = self._conn.execute(
             """
@@ -302,12 +290,8 @@ class SQLiteStorage:
         Returns:
             Average latency in ms.
         """
-        start = datetime.combine(target_date, datetime.min.time()).replace(
-            tzinfo=UTC
-        )
-        end = datetime.combine(target_date, datetime.max.time()).replace(
-            tzinfo=UTC
-        )
+        start = datetime.combine(target_date, datetime.min.time()).replace(tzinfo=UTC)
+        end = datetime.combine(target_date, datetime.max.time()).replace(tzinfo=UTC)
 
         cursor = self._conn.execute(
             """

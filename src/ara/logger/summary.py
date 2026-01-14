@@ -78,8 +78,7 @@ class DailySummary:
             "mode_breakdown": self.mode_breakdown,
             "top_intents": self.top_intents,
             "action_items": [
-                {"text": a.text, "source": a.source_transcript}
-                for a in self.action_items
+                {"text": a.text, "source": a.source_transcript} for a in self.action_items
             ],
             "notable_interactions": self.notable_interactions,
             "generated_at": self.generated_at.isoformat(),
@@ -213,12 +212,8 @@ class SummaryGenerator:
             Generated DailySummary.
         """
         # Get interactions for the date
-        start = datetime.combine(target_date, datetime.min.time()).replace(
-            tzinfo=UTC
-        )
-        end = datetime.combine(target_date, datetime.max.time()).replace(
-            tzinfo=UTC
-        )
+        start = datetime.combine(target_date, datetime.min.time()).replace(tzinfo=UTC)
+        end = datetime.combine(target_date, datetime.max.time()).replace(tzinfo=UTC)
 
         interactions = self._storage.sqlite.get_by_date_range(start, end)
 

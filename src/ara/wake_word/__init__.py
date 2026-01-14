@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
 
 def create_wake_word_detector(
-    config: "WakeWordConfig | None" = None,
+    config: "WakeWordConfig | None" = None,  # noqa: ARG001
     use_mock: bool = False,
     access_key: str | None = None,
 ) -> WakeWordDetector:

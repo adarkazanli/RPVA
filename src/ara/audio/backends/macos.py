@@ -48,9 +48,7 @@ class MacOSAudioCapture:
             RuntimeError: If PyAudio is not available
         """
         if not PYAUDIO_AVAILABLE:
-            raise RuntimeError(
-                "PyAudio not available. Install with: pip install pyaudio"
-            )
+            raise RuntimeError("PyAudio not available. Install with: pip install pyaudio")
 
         self._device_name = device_name
         self._sample_rate = sample_rate
@@ -73,10 +71,7 @@ class MacOSAudioCapture:
 
         for i in range(self._pa.get_device_count()):
             info = self._pa.get_device_info_by_index(i)
-            if (
-                self._device_name.lower() in info["name"].lower()
-                and info["maxInputChannels"] > 0
-            ):
+            if self._device_name.lower() in info["name"].lower() and info["maxInputChannels"] > 0:
                 return i
 
         return None  # Fall back to default
@@ -192,9 +187,7 @@ class MacOSAudioPlayback:
             RuntimeError: If PyAudio is not available
         """
         if not PYAUDIO_AVAILABLE:
-            raise RuntimeError(
-                "PyAudio not available. Install with: pip install pyaudio"
-            )
+            raise RuntimeError("PyAudio not available. Install with: pip install pyaudio")
 
         self._device_name = device_name
         self._sample_rate = sample_rate
@@ -209,10 +202,7 @@ class MacOSAudioPlayback:
 
         for i in range(pa.get_device_count()):
             info = pa.get_device_info_by_index(i)
-            if (
-                self._device_name.lower() in info["name"].lower()
-                and info["maxOutputChannels"] > 0
-            ):
+            if self._device_name.lower() in info["name"].lower() and info["maxOutputChannels"] > 0:
                 return i
 
         return None

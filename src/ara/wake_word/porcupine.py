@@ -51,9 +51,7 @@ class PorcupineWakeWordDetector:
             RuntimeError: If Porcupine is not available
         """
         if not PORCUPINE_AVAILABLE:
-            raise RuntimeError(
-                "Porcupine not available. Install with: pip install pvporcupine"
-            )
+            raise RuntimeError("Porcupine not available. Install with: pip install pvporcupine")
 
         self._access_key = access_key or os.environ.get("PICOVOICE_ACCESS_KEY")
         self._porcupine = None
@@ -104,8 +102,7 @@ class PorcupineWakeWordDetector:
         )
 
         logger.info(
-            f"Porcupine initialized with keywords: {porcupine_keywords}, "
-            f"sensitivity: {sensitivity}"
+            f"Porcupine initialized with keywords: {porcupine_keywords}, sensitivity: {sensitivity}"
         )
 
     def process(self, audio: "AudioChunk") -> WakeWordResult:

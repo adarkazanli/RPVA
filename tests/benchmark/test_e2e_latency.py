@@ -55,9 +55,7 @@ class TestE2ELatency:
         )
 
     @pytest.mark.benchmark
-    def test_full_interaction_latency(
-        self, benchmark, mock_orchestrator: Orchestrator
-    ) -> None:
+    def test_full_interaction_latency(self, benchmark, mock_orchestrator: Orchestrator) -> None:
         """Benchmark complete voice interaction."""
 
         def run_interaction():
@@ -94,7 +92,7 @@ class TestE2ELatency:
 
     @pytest.mark.benchmark
     @pytest.mark.slow
-    def test_real_components_latency(self, benchmark) -> None:
+    def test_real_components_latency(self, benchmark) -> None:  # noqa: ARG002
         """Benchmark with real components (requires dependencies).
 
         This test requires:
@@ -115,9 +113,7 @@ class TestE2ELatency:
         assert orchestrator.is_ready
 
     @pytest.mark.benchmark
-    def test_throughput_interactions_per_minute(
-        self, mock_orchestrator: Orchestrator
-    ) -> None:
+    def test_throughput_interactions_per_minute(self, mock_orchestrator: Orchestrator) -> None:
         """Measure how many interactions can be processed per minute."""
         import time
 

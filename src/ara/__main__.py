@@ -125,9 +125,7 @@ def handle_test_utterance(
 
     try:
         # Load the WAV file into mock capture
-        if hasattr(orchestrator, "_capture") and hasattr(
-            orchestrator._capture, "set_audio_file"
-        ):
+        if hasattr(orchestrator, "_capture") and hasattr(orchestrator._capture, "set_audio_file"):
             orchestrator._capture.set_audio_file(utterance_path)
         else:
             logger.error("Mock audio capture required for test utterance mode")
@@ -204,9 +202,7 @@ def main() -> int:
 
     network_monitor = NetworkMonitor()
     network_status = network_monitor.check_connectivity()
-    mode_indicator = (
-        "ONLINE" if network_status == NetworkStatus.ONLINE else "OFFLINE"
-    )
+    mode_indicator = "ONLINE" if network_status == NetworkStatus.ONLINE else "OFFLINE"
 
     # Print startup banner
     print("\n" + "=" * 50)

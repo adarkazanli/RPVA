@@ -72,9 +72,7 @@ class MockTranscriber:
             segments=[],
         )
 
-    def transcribe_stream(
-        self, audio_stream: Iterator[bytes]
-    ) -> Iterator[PartialTranscription]:
+    def transcribe_stream(self, audio_stream: Iterator[bytes]) -> Iterator[PartialTranscription]:
         """Yield mock partial transcriptions."""
         # Consume the stream
         for _ in audio_stream:
@@ -83,7 +81,7 @@ class MockTranscriber:
         # Return the preset response as a final result
         if self._response_text:
             words = self._response_text.split()
-            for i, word in enumerate(words):
+            for i, _word in enumerate(words):
                 yield PartialTranscription(
                     text=" ".join(words[: i + 1]),
                     is_final=(i == len(words) - 1),

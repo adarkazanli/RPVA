@@ -4,6 +4,7 @@ Provides AudioCapture and AudioPlayback implementations for Linux
 (including Raspberry Pi) using PyAudio (PortAudio/ALSA wrapper).
 """
 
+import contextlib
 import math
 import struct
 import threading
@@ -51,8 +52,7 @@ class LinuxAudioCapture:
         """
         if not PYAUDIO_AVAILABLE:
             raise RuntimeError(
-                "PyAudio not available. Install with: "
-                "sudo apt-get install python3-pyaudio"
+                "PyAudio not available. Install with: sudo apt-get install python3-pyaudio"
             )
 
         self._device_name = device_name
@@ -129,10 +129,8 @@ class LinuxAudioCapture:
             self._stream = None
 
         if self._pa is not None:
-            try:
+            with contextlib.suppress(Exception):
                 self._pa.terminate()
-            except Exception:
-                pass
             self._pa = None
 
     def read(self, frames: int) -> AudioChunk:
@@ -218,8 +216,7 @@ class LinuxAudioPlayback:
         """
         if not PYAUDIO_AVAILABLE:
             raise RuntimeError(
-                "PyAudio not available. Install with: "
-                "sudo apt-get install python3-pyaudio"
+                "PyAudio not available. Install with: sudo apt-get install python3-pyaudio"
             )
 
         self._device_name = device_name

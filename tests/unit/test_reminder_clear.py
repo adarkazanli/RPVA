@@ -149,7 +149,11 @@ class TestClearAllWhenEmpty:
         response = orchestrator.process("clear all reminders")
 
         # Should indicate no reminders to clear
-        assert "don't have" in response.lower() or "empty" in response.lower() or "no" in response.lower()
+        assert (
+            "don't have" in response.lower()
+            or "empty" in response.lower()
+            or "no" in response.lower()
+        )
 
     def test_clear_all_does_not_affect_non_pending(self) -> None:
         """Test that clear_all only affects pending reminders."""

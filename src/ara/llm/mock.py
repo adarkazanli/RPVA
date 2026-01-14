@@ -52,8 +52,8 @@ class MockLanguageModel:
     def generate(
         self,
         prompt: str,
-        max_tokens: int = 150,
-        temperature: float = 0.7,
+        max_tokens: int = 150,  # noqa: ARG002
+        temperature: float = 0.7,  # noqa: ARG002
     ) -> LLMResponse:
         """Return preset response."""
         self._call_count += 1
@@ -81,8 +81,8 @@ class MockLanguageModel:
     def generate_stream(
         self,
         prompt: str,
-        max_tokens: int = 150,
-        temperature: float = 0.7,
+        max_tokens: int = 150,  # noqa: ARG002
+        temperature: float = 0.7,  # noqa: ARG002
     ) -> Iterator[StreamToken]:
         """Stream mock response token by token."""
         self._call_count += 1

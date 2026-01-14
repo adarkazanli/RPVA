@@ -61,9 +61,7 @@ class Transcriber(Protocol):
         """
         ...
 
-    def transcribe_stream(
-        self, audio_stream: Iterator[bytes]
-    ) -> Iterator[PartialTranscription]:
+    def transcribe_stream(self, audio_stream: Iterator[bytes]) -> Iterator[PartialTranscription]:
         """Stream transcription results as audio arrives.
 
         Args:

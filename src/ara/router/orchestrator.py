@@ -53,8 +53,16 @@ def _get_ordinal(n: int) -> str:
         Ordinal string (first, second, ... tenth, 11th, 12th, etc.)
     """
     ordinals = {
-        1: "first", 2: "second", 3: "third", 4: "fourth", 5: "fifth",
-        6: "sixth", 7: "seventh", 8: "eighth", 9: "ninth", 10: "tenth",
+        1: "first",
+        2: "second",
+        3: "third",
+        4: "fourth",
+        5: "fifth",
+        6: "sixth",
+        7: "seventh",
+        8: "eighth",
+        9: "ninth",
+        10: "tenth",
     }
 
     if n in ordinals:
@@ -158,9 +166,7 @@ class Orchestrator:
         )
 
         # System command handler (if mode manager is provided)
-        self._system_handler = (
-            SystemCommandHandler(mode_manager) if mode_manager else None
-        )
+        self._system_handler = SystemCommandHandler(mode_manager) if mode_manager else None
 
         # Background check thread for timers/reminders
         self._check_thread: threading.Thread | None = None
@@ -574,8 +580,16 @@ class Orchestrator:
 
         # Ordinal word to number mapping
         ordinal_words = {
-            "first": 1, "second": 2, "third": 3, "fourth": 4, "fifth": 5,
-            "sixth": 6, "seventh": 7, "eighth": 8, "ninth": 9, "tenth": 10,
+            "first": 1,
+            "second": 2,
+            "third": 3,
+            "fourth": 4,
+            "fifth": 5,
+            "sixth": 6,
+            "seventh": 7,
+            "eighth": 8,
+            "ninth": 9,
+            "tenth": 10,
         }
 
         # Extract ordinal words
@@ -673,16 +687,10 @@ class Orchestrator:
         today = date.today()
         if time_ref == "yesterday":
             target_date = today - timedelta(days=1)
-            start = datetime.combine(target_date, datetime.min.time()).replace(
-                tzinfo=UTC
-            )
-            end = datetime.combine(target_date, datetime.max.time()).replace(
-                tzinfo=UTC
-            )
+            start = datetime.combine(target_date, datetime.min.time()).replace(tzinfo=UTC)
+            end = datetime.combine(target_date, datetime.max.time()).replace(tzinfo=UTC)
         elif time_ref == "today":
-            start = datetime.combine(today, datetime.min.time()).replace(
-                tzinfo=UTC
-            )
+            start = datetime.combine(today, datetime.min.time()).replace(tzinfo=UTC)
             end = datetime.now(UTC)
         else:
             # Recent - last 10 interactions
@@ -697,9 +705,7 @@ class Orchestrator:
             return " ".join(lines)
 
         # Query by date range
-        interactions = self._interaction_logger.storage.sqlite.get_by_date_range(
-            start, end
-        )
+        interactions = self._interaction_logger.storage.sqlite.get_by_date_range(start, end)
 
         if not interactions:
             if time_ref == "yesterday":
@@ -877,9 +883,7 @@ class Orchestrator:
 
         return sorted(upcoming, key=lambda r: r.remind_at)
 
-    def _generate_countdown_phrase(
-        self, reminders: list[Reminder], user_name: str | None
-    ) -> str:
+    def _generate_countdown_phrase(self, reminders: list[Reminder], user_name: str | None) -> str:
         """Generate the countdown announcement phrase.
 
         Args:
@@ -1070,9 +1074,7 @@ class Orchestrator:
         self._thread.start()
 
         # Start timer/reminder check thread
-        self._check_thread = threading.Thread(
-            target=self._check_timers_and_reminders, daemon=True
-        )
+        self._check_thread = threading.Thread(target=self._check_timers_and_reminders, daemon=True)
         self._check_thread.start()
 
         logger.info("Voice loop started")

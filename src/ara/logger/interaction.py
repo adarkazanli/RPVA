@@ -316,19 +316,11 @@ class InteractionLogger:
             List of interactions from that date.
         """
         if self._storage is not None:
-            start = datetime.combine(target_date, datetime.min.time()).replace(
-                tzinfo=UTC
-            )
-            end = datetime.combine(target_date, datetime.max.time()).replace(
-                tzinfo=UTC
-            )
+            start = datetime.combine(target_date, datetime.min.time()).replace(tzinfo=UTC)
+            end = datetime.combine(target_date, datetime.max.time()).replace(tzinfo=UTC)
             return self._storage.sqlite.get_by_date_range(start, end)
         else:
-            return [
-                i
-                for i in self._interactions
-                if i.timestamp.date() == target_date
-            ]
+            return [i for i in self._interactions if i.timestamp.date() == target_date]
 
 
 __all__ = [

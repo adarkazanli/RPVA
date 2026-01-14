@@ -23,9 +23,7 @@ class TestCompleteCountdownFlow:
         mock_playback = MagicMock()
 
         # Configure synthesizer to return mock audio
-        mock_synthesizer.synthesize.return_value = MagicMock(
-            audio=b"mock_audio", sample_rate=16000
-        )
+        mock_synthesizer.synthesize.return_value = MagicMock(audio=b"mock_audio", sample_rate=16000)
 
         orch = Orchestrator(
             llm=mock_llm,
@@ -132,9 +130,7 @@ class TestCountdownCancellation:
         mock_synthesizer = MagicMock()
         mock_playback = MagicMock()
 
-        mock_synthesizer.synthesize.return_value = MagicMock(
-            audio=b"mock_audio", sample_rate=16000
-        )
+        mock_synthesizer.synthesize.return_value = MagicMock(audio=b"mock_audio", sample_rate=16000)
 
         orch = Orchestrator(
             llm=mock_llm,
@@ -164,9 +160,7 @@ class TestCountdownCancellation:
         # and not speak further numbers
         assert orchestrator._countdown_active.get(reminder.id) is False
 
-    def test_countdown_respects_cancellation_flag(
-        self, orchestrator: Orchestrator
-    ) -> None:
+    def test_countdown_respects_cancellation_flag(self, orchestrator: Orchestrator) -> None:
         """Test that countdown checks cancellation before each number."""
         import threading
         import time
@@ -219,9 +213,7 @@ class TestOverlappingTimersCombinedCountdown:
         mock_synthesizer = MagicMock()
         mock_playback = MagicMock()
 
-        mock_synthesizer.synthesize.return_value = MagicMock(
-            audio=b"mock_audio", sample_rate=16000
-        )
+        mock_synthesizer.synthesize.return_value = MagicMock(audio=b"mock_audio", sample_rate=16000)
 
         orch = Orchestrator(
             llm=mock_llm,
@@ -283,9 +275,7 @@ class TestOverlappingTimersCombinedCountdown:
             created_by_interaction=uuid.uuid4(),
         )
 
-        phrase = orchestrator._generate_countdown_phrase(
-            [reminder1, reminder2], "Ammar"
-        )
+        phrase = orchestrator._generate_countdown_phrase([reminder1, reminder2], "Ammar")
 
         # Should combine with "and"
         assert "start the call" in phrase
@@ -293,9 +283,7 @@ class TestOverlappingTimersCombinedCountdown:
         assert " and " in phrase
         assert phrase == "Ammar, you should start the call and prepare notes in"
 
-    def test_combined_countdown_single_sequence(
-        self, orchestrator: Orchestrator
-    ) -> None:
+    def test_combined_countdown_single_sequence(self, orchestrator: Orchestrator) -> None:
         """Test that combined reminders share a single countdown sequence."""
         now = datetime.now(UTC)
 
@@ -363,9 +351,7 @@ class TestEndToEndCountdown:
         mock_synthesizer = MagicMock()
         mock_playback = MagicMock()
 
-        mock_synthesizer.synthesize.return_value = MagicMock(
-            audio=b"mock_audio", sample_rate=16000
-        )
+        mock_synthesizer.synthesize.return_value = MagicMock(audio=b"mock_audio", sample_rate=16000)
 
         orch = Orchestrator(
             llm=mock_llm,

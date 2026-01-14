@@ -225,9 +225,7 @@ class TestSummaryGenerator:
         assert summary.error_count == 1
         assert summary.successful_interactions == 9
 
-    def test_generate_summary_no_interactions(
-        self, generator: SummaryGenerator
-    ) -> None:
+    def test_generate_summary_no_interactions(self, generator: SummaryGenerator) -> None:
         """Test generating summary for date with no interactions."""
         past_date = date(2020, 1, 1)
         summary = generator.generate(past_date, device_id="test-device")

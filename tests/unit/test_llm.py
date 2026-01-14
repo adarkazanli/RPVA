@@ -1,6 +1,5 @@
 """Unit tests for language model module."""
 
-
 from ara.llm import LLMResponse, create_language_model
 from ara.llm.mock import MockLanguageModel
 

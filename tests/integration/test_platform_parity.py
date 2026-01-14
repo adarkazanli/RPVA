@@ -4,7 +4,6 @@ Ensures identical behavior across platforms for same inputs.
 """
 
 
-
 class TestPlatformParity:
     """Tests for cross-platform behavior parity."""
 

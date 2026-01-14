@@ -7,8 +7,6 @@ import json
 import tempfile
 from pathlib import Path
 
-import pytest
-
 from ara.config.user_profile import UserProfile, load_user_profile, save_user_profile
 
 
@@ -137,9 +135,7 @@ class TestSaveUserProfile:
         """Test that save then load preserves all data."""
         with tempfile.TemporaryDirectory() as tmpdir:
             profile_path = Path(tmpdir) / "profile.json"
-            original = UserProfile(
-                name="Ammar", preferences={"theme": "dark", "sound": True}
-            )
+            original = UserProfile(name="Ammar", preferences={"theme": "dark", "sound": True})
 
             save_user_profile(original, profile_path)
             loaded = load_user_profile(profile_path)

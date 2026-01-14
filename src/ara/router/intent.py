@@ -138,34 +138,20 @@ class IntentClassifier:
         """Initialize the classifier."""
         # Pre-compile patterns for efficiency
         self._timer_set = [re.compile(p, re.IGNORECASE) for p in self.TIMER_SET_PATTERNS]
-        self._timer_cancel = [
-            re.compile(p, re.IGNORECASE) for p in self.TIMER_CANCEL_PATTERNS
-        ]
-        self._timer_query = [
-            re.compile(p, re.IGNORECASE) for p in self.TIMER_QUERY_PATTERNS
-        ]
-        self._reminder_set = [
-            re.compile(p, re.IGNORECASE) for p in self.REMINDER_SET_PATTERNS
-        ]
+        self._timer_cancel = [re.compile(p, re.IGNORECASE) for p in self.TIMER_CANCEL_PATTERNS]
+        self._timer_query = [re.compile(p, re.IGNORECASE) for p in self.TIMER_QUERY_PATTERNS]
+        self._reminder_set = [re.compile(p, re.IGNORECASE) for p in self.REMINDER_SET_PATTERNS]
         self._reminder_cancel = [
             re.compile(p, re.IGNORECASE) for p in self.REMINDER_CANCEL_PATTERNS
         ]
-        self._reminder_query = [
-            re.compile(p, re.IGNORECASE) for p in self.REMINDER_QUERY_PATTERNS
-        ]
+        self._reminder_query = [re.compile(p, re.IGNORECASE) for p in self.REMINDER_QUERY_PATTERNS]
         self._reminder_clear_all = [
             re.compile(p, re.IGNORECASE) for p in self.REMINDER_CLEAR_ALL_PATTERNS
         ]
-        self._history_query = [
-            re.compile(p, re.IGNORECASE) for p in self.HISTORY_QUERY_PATTERNS
-        ]
-        self._web_search = [
-            re.compile(p, re.IGNORECASE) for p in self.WEB_SEARCH_PATTERNS
-        ]
+        self._history_query = [re.compile(p, re.IGNORECASE) for p in self.HISTORY_QUERY_PATTERNS]
+        self._web_search = [re.compile(p, re.IGNORECASE) for p in self.WEB_SEARCH_PATTERNS]
         self._system = [(re.compile(p, re.IGNORECASE), cmd) for p, cmd in self.SYSTEM_PATTERNS]
-        self._user_name_set = [
-            re.compile(p, re.IGNORECASE) for p in self.USER_NAME_SET_PATTERNS
-        ]
+        self._user_name_set = [re.compile(p, re.IGNORECASE) for p in self.USER_NAME_SET_PATTERNS]
 
     def classify(self, text: str) -> Intent:
         """Classify the given text into an intent.

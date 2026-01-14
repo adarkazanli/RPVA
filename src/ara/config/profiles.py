@@ -133,12 +133,13 @@ def detect_profile() -> Profile:
     """
     # Check environment variable first
     env_profile = os.environ.get("ARA_PROFILE", "").lower()
-    if env_profile == "prod":
-        return Profile.PROD
-    elif env_profile == "dev":
-        return Profile.DEV
-    elif env_profile == "test":
-        return Profile.TEST
+    profile_map = {
+        "prod": Profile.PROD,
+        "dev": Profile.DEV,
+        "test": Profile.TEST,
+    }
+    if env_profile in profile_map:
+        return profile_map[env_profile]
 
     # Auto-detect based on platform
     plat = detect_platform()

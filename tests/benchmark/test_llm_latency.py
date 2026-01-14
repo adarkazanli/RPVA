@@ -20,9 +20,7 @@ class TestLLMLatency:
         return llm
 
     @pytest.mark.benchmark
-    def test_mock_generation_latency(
-        self, benchmark, mock_llm: MockLanguageModel
-    ) -> None:
+    def test_mock_generation_latency(self, benchmark, mock_llm: MockLanguageModel) -> None:
         """Benchmark mock generation (baseline)."""
         mock_llm.set_latency(0)  # Remove artificial latency
 
@@ -53,9 +51,7 @@ class TestLLMLatency:
             pytest.skip("Ollama client not available")
 
         # Set system prompt for consistent responses
-        llm.set_system_prompt(
-            "You are a helpful assistant. Keep responses brief (1 sentence)."
-        )
+        llm.set_system_prompt("You are a helpful assistant. Keep responses brief (1 sentence).")
 
         # Warm up
         llm.generate("Hello")
@@ -68,9 +64,7 @@ class TestLLMLatency:
         assert result.latency_ms > 0
 
     @pytest.mark.benchmark
-    def test_generation_with_context(
-        self, benchmark, mock_llm: MockLanguageModel
-    ) -> None:
+    def test_generation_with_context(self, benchmark, mock_llm: MockLanguageModel) -> None:
         """Benchmark generation with conversation context."""
         mock_llm.set_latency(0)
 
@@ -85,9 +79,7 @@ class TestLLMLatency:
         assert result.text != ""
 
     @pytest.mark.benchmark
-    def test_streaming_generation_latency(
-        self, benchmark, mock_llm: MockLanguageModel
-    ) -> None:
+    def test_streaming_generation_latency(self, benchmark, mock_llm: MockLanguageModel) -> None:
         """Benchmark time to first token in streaming mode."""
         mock_llm.set_latency(0)
 

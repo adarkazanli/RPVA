@@ -4,7 +4,6 @@ Tests that run in CI environments without real audio hardware.
 """
 
 
-
 class TestCIMockAudio:
     """Tests for CI environment with mock audio."""
 

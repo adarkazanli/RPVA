@@ -92,8 +92,8 @@ class TestTimeAwareResponseFormat:
         future = format_time_local(target)
 
         # Both should have AM/PM
-        assert ("AM" in current or "PM" in current)
-        assert ("AM" in future or "PM" in future)
+        assert "AM" in current or "PM" in current
+        assert "AM" in future or "PM" in future
 
         # Both should have colon for time
         assert ":" in current

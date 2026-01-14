@@ -1,6 +1,5 @@
 """Integration tests for online query flow."""
 
-
 import pytest
 
 from ara.audio.mock_capture import MockAudioCapture, MockAudioPlayback
@@ -41,9 +40,7 @@ class TestOnlineQueryFlow:
             feedback=feedback,
         )
 
-    def test_web_search_intent_triggers_search(
-        self, orchestrator: Orchestrator
-    ) -> None:
+    def test_web_search_intent_triggers_search(self, orchestrator: Orchestrator) -> None:
         """Test web search intent triggers web search."""
         orchestrator._transcriber.set_response("search for Raspberry Pi 5")
         orchestrator._llm.set_response(
@@ -59,9 +56,7 @@ class TestOnlineQueryFlow:
 
     def test_with_internet_trigger(self, orchestrator: Orchestrator) -> None:
         """Test 'with internet' phrase triggers online mode."""
-        orchestrator._transcriber.set_response(
-            "with internet, what is the weather today"
-        )
+        orchestrator._transcriber.set_response("with internet, what is the weather today")
         orchestrator._llm.set_response("Currently sunny and 72 degrees.")
         orchestrator._wake_word.schedule_detection(at_chunk=0, confidence=0.9)
         orchestrator._capture.set_audio_data(bytes(16000 * 2))
@@ -110,9 +105,7 @@ class TestGracefulDegradation:
             feedback=feedback,
         )
 
-    def test_offline_during_search_falls_back_to_local(
-        self, orchestrator: Orchestrator
-    ) -> None:
+    def test_offline_during_search_falls_back_to_local(self, orchestrator: Orchestrator) -> None:
         """Test search request while offline falls back to local LLM."""
         orchestrator._transcriber.set_response("search for something")
         orchestrator._llm.set_response(
@@ -133,9 +126,7 @@ class TestGracefulDegradation:
         # Should still get a response, even if offline
         assert result.response_text != ""
 
-    def test_cloud_api_error_falls_back_to_local(
-        self, orchestrator: Orchestrator
-    ) -> None:
+    def test_cloud_api_error_falls_back_to_local(self, orchestrator: Orchestrator) -> None:
         """Test cloud API error falls back to local LLM."""
         orchestrator._transcriber.set_response("complex query for cloud")
         orchestrator._llm.set_response("Local fallback response.")
@@ -223,7 +214,7 @@ class TestResponseSourceLogging:
             storage=storage,
         )
 
-    def test_local_response_logged_correctly(self, logger, storage) -> None:
+    def test_local_response_logged_correctly(self, logger, storage) -> None:  # noqa: ARG002
         """Test local LLM response is logged with correct source."""
         from ara.logger.interaction import ResponseSource
 
@@ -237,7 +228,7 @@ class TestResponseSourceLogging:
 
         assert interaction.response_source == ResponseSource.LOCAL_LLM
 
-    def test_cloud_response_logged_correctly(self, logger, storage) -> None:
+    def test_cloud_response_logged_correctly(self, logger, storage) -> None:  # noqa: ARG002
         """Test cloud API response is logged with correct source."""
         from ara.logger.interaction import ResponseSource
 
@@ -251,7 +242,7 @@ class TestResponseSourceLogging:
 
         assert interaction.response_source == ResponseSource.CLOUD_API
 
-    def test_system_response_logged_correctly(self, logger, storage) -> None:
+    def test_system_response_logged_correctly(self, logger, storage) -> None:  # noqa: ARG002
         """Test system response is logged with correct source."""
         from ara.logger.interaction import ResponseSource
 

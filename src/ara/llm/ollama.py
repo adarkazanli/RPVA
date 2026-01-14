@@ -47,9 +47,7 @@ class OllamaLanguageModel:
             RuntimeError: If Ollama client is not available
         """
         if not OLLAMA_AVAILABLE:
-            raise RuntimeError(
-                "Ollama client not available. Install with: pip install ollama"
-            )
+            raise RuntimeError("Ollama client not available. Install with: pip install ollama")
 
         self._model = model
         self._host = host
@@ -127,9 +125,7 @@ class OllamaLanguageModel:
         # Estimate tokens
         tokens_used = response.get("eval_count", len(response_text.split()))
 
-        logger.debug(
-            f"Generated {tokens_used} tokens in {latency_ms}ms: '{response_text[:50]}...'"
-        )
+        logger.debug(f"Generated {tokens_used} tokens in {latency_ms}ms: '{response_text[:50]}...'")
 
         return LLMResponse(
             text=response_text,

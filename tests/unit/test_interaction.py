@@ -269,9 +269,15 @@ class TestInteractionLogger:
 
     def test_log_increments_session_count(self, logger: InteractionLogger) -> None:
         """Test that logging increments session interaction count."""
-        logger.log(transcript="one", response="1", intent="general_question", latency_ms={"total": 100})
-        logger.log(transcript="two", response="2", intent="general_question", latency_ms={"total": 100})
-        logger.log(transcript="three", response="3", intent="general_question", latency_ms={"total": 100})
+        logger.log(
+            transcript="one", response="1", intent="general_question", latency_ms={"total": 100}
+        )
+        logger.log(
+            transcript="two", response="2", intent="general_question", latency_ms={"total": 100}
+        )
+        logger.log(
+            transcript="three", response="3", intent="general_question", latency_ms={"total": 100}
+        )
 
         assert logger.current_session.interaction_count == 3
 

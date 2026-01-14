@@ -220,3 +220,148 @@ class TestOverlappingCountdownCombination:
 
         # Reminder should be marked as in-countdown
         assert orchestrator._countdown_active.get(reminder_id) is True
+
+
+class TestCountdownEdgeCases:
+    """Tests for countdown edge cases."""
+
+    def test_start_countdown_returns_early_if_no_synthesizer(self):
+        """Test that countdown returns early when synthesizer is None."""
+        from ara.router.orchestrator import Orchestrator
+
+        orchestrator = Orchestrator(llm=MagicMock())
+        orchestrator._synthesizer = None
+        orchestrator._playback = MagicMock()
+
+        reminder = MagicMock()
+        reminder.message = "test"
+        reminder.id = uuid.uuid4()
+
+        # Should return without error
+        orchestrator._start_countdown([reminder])
+
+        # Should not crash and reminders should not be marked active
+        assert reminder.id not in orchestrator._countdown_active
+
+    def test_start_countdown_returns_early_if_no_playback(self):
+        """Test that countdown returns early when playback is None."""
+        from ara.router.orchestrator import Orchestrator
+
+        orchestrator = Orchestrator(llm=MagicMock())
+        orchestrator._synthesizer = MagicMock()
+        orchestrator._playback = None
+
+        reminder = MagicMock()
+        reminder.message = "test"
+        reminder.id = uuid.uuid4()
+
+        # Should return without error
+        orchestrator._start_countdown([reminder])
+
+        # Should not crash
+        assert reminder.id not in orchestrator._countdown_active
+
+    def test_start_countdown_returns_early_if_empty_reminders(self):
+        """Test that countdown returns early with empty reminder list."""
+        from ara.router.orchestrator import Orchestrator
+
+        orchestrator = Orchestrator(llm=MagicMock())
+        orchestrator._synthesizer = MagicMock()
+        orchestrator._playback = MagicMock()
+
+        # Should return without error
+        orchestrator._start_countdown([])
+
+        # Synthesizer should not be called
+        orchestrator._synthesizer.synthesize.assert_not_called()
+
+    def test_start_countdown_skips_if_already_in_progress(self):
+        """Test that countdown skips if another is already in progress."""
+        from ara.router.orchestrator import Orchestrator
+
+        orchestrator = Orchestrator(llm=MagicMock())
+        orchestrator._synthesizer = MagicMock()
+        orchestrator._playback = MagicMock()
+        orchestrator._countdown_in_progress = True
+
+        reminder = MagicMock()
+        reminder.message = "test"
+        reminder.id = uuid.uuid4()
+        reminder.remind_at = datetime.now(UTC) + timedelta(seconds=5)
+
+        # Should return without processing
+        orchestrator._start_countdown([reminder])
+
+        # Synthesizer should not be called
+        orchestrator._synthesizer.synthesize.assert_not_called()
+
+    def test_get_countdown_start_edge_cases(self):
+        """Test countdown start number for various edge cases."""
+        from ara.router.orchestrator import Orchestrator
+
+        orchestrator = Orchestrator(llm=MagicMock())
+
+        # Zero seconds
+        assert orchestrator._get_countdown_start(0) == 1
+
+        # Negative seconds (shouldn't happen but handle gracefully)
+        assert orchestrator._get_countdown_start(-5) == 1
+
+        # Exactly 5 seconds
+        assert orchestrator._get_countdown_start(5) == 5
+
+        # Between values
+        assert orchestrator._get_countdown_start(2.5) == 2
+        assert orchestrator._get_countdown_start(4.9) == 4
+
+    def test_generate_countdown_phrase_three_or_more_tasks(self):
+        """Test phrase generation for three or more overlapping reminders."""
+        from ara.router.orchestrator import Orchestrator
+
+        orchestrator = Orchestrator(llm=MagicMock())
+
+        reminders = []
+        for task in ["task one", "task two", "task three"]:
+            reminder = MagicMock()
+            reminder.message = task
+            reminder.id = uuid.uuid4()
+            reminders.append(reminder)
+
+        phrase = orchestrator._generate_countdown_phrase(reminders, "User")
+        assert "User" in phrase
+        assert "task one" in phrase
+        assert "task two" in phrase
+        assert "task three" in phrase
+        # All joined with "and"
+        assert " and " in phrase
+
+    def test_get_upcoming_reminders_excludes_past_reminders(self):
+        """Test that reminders already past are not included."""
+        from ara.router.orchestrator import Orchestrator
+
+        orchestrator = Orchestrator(llm=MagicMock())
+
+        now = datetime.now(UTC)
+
+        # Past reminder
+        past_reminder = MagicMock()
+        past_reminder.remind_at = now - timedelta(seconds=10)
+        past_reminder.message = "past"
+        past_reminder.id = uuid.uuid4()
+
+        # Future reminder
+        future_reminder = MagicMock()
+        future_reminder.remind_at = now + timedelta(seconds=3)
+        future_reminder.message = "future"
+        future_reminder.id = uuid.uuid4()
+
+        orchestrator._reminder_manager = MagicMock()
+        orchestrator._reminder_manager.list_pending.return_value = [
+            past_reminder,
+            future_reminder,
+        ]
+
+        upcoming = orchestrator._get_upcoming_reminders(5)
+        assert len(upcoming) == 1
+        assert future_reminder in upcoming
+        assert past_reminder not in upcoming

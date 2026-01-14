@@ -57,9 +57,7 @@ class PiperSynthesizer:
     def _init_piper(self) -> None:
         """Initialize Piper voice."""
         if not PIPER_AVAILABLE:
-            logger.warning(
-                "piper-tts not available. Install with: pip install piper-tts"
-            )
+            logger.warning("piper-tts not available. Install with: pip install piper-tts")
             return
 
         model_path = self._models_dir / f"{self._voice}.onnx"
@@ -67,8 +65,7 @@ class PiperSynthesizer:
 
         if not model_path.exists():
             logger.warning(
-                f"Piper model not found: {model_path}. "
-                "Run scripts/download_models.sh to download."
+                f"Piper model not found: {model_path}. Run scripts/download_models.sh to download."
             )
             return
 
@@ -110,10 +107,7 @@ class PiperSynthesizer:
             duration_ms = int(len(audio_data) / (sample_rate * 2) * 1000)
             latency_ms = int((time.time() - start_time) * 1000)
 
-            logger.debug(
-                f"Synthesized '{text[:30]}...' in {latency_ms}ms "
-                f"({duration_ms}ms audio)"
-            )
+            logger.debug(f"Synthesized '{text[:30]}...' in {latency_ms}ms ({duration_ms}ms audio)")
 
             return SynthesisResult(
                 audio=audio_data,
@@ -157,7 +151,7 @@ class PiperSynthesizer:
             latency_ms=0,
         )
 
-    def _adjust_speed(self, audio: bytes, sample_rate: int) -> bytes:
+    def _adjust_speed(self, audio: bytes, sample_rate: int) -> bytes:  # noqa: ARG002
         """Adjust audio playback speed.
 
         Simple resampling - for production, use a proper audio library.

@@ -221,17 +221,23 @@ class TestPlatformDetection:
 
     def test_detect_linux(self) -> None:
         """Test Linux detection."""
-        with mock.patch("platform.system", return_value="Linux"), mock.patch(
-            "builtins.open",
-            mock.mock_open(read_data="processor: 0\n"),
+        with (
+            mock.patch("platform.system", return_value="Linux"),
+            mock.patch(
+                "builtins.open",
+                mock.mock_open(read_data="processor: 0\n"),
+            ),
         ):
             assert detect_audio_platform() == "linux"
 
     def test_detect_raspberry_pi(self) -> None:
         """Test Raspberry Pi detection."""
-        with mock.patch("platform.system", return_value="Linux"), mock.patch(
-            "builtins.open",
-            mock.mock_open(read_data="Raspberry Pi 4 Model B\n"),
+        with (
+            mock.patch("platform.system", return_value="Linux"),
+            mock.patch(
+                "builtins.open",
+                mock.mock_open(read_data="Raspberry Pi 4 Model B\n"),
+            ),
         ):
             assert detect_audio_platform() == "raspberrypi"
 

@@ -55,9 +55,7 @@ def create_synthesizer(
         # Fall back to mock
         import logging
 
-        logging.getLogger(__name__).warning(
-            "Piper not available, using mock synthesizer"
-        )
+        logging.getLogger(__name__).warning("Piper not available, using mock synthesizer")
         return MockSynthesizer()
 
 

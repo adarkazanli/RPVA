@@ -80,9 +80,7 @@ class TestIntentClassifier:
         assert intent.type == IntentType.TIMER_CANCEL
         assert intent.confidence >= 0.8
 
-    def test_classify_timer_cancel_specific(
-        self, classifier: IntentClassifier
-    ) -> None:
+    def test_classify_timer_cancel_specific(self, classifier: IntentClassifier) -> None:
         """Test classifying specific timer cancellation."""
         intent = classifier.classify("cancel the pasta timer")
         assert intent.type == IntentType.TIMER_CANCEL
@@ -107,9 +105,7 @@ class TestIntentClassifier:
         assert intent.confidence >= 0.8
         assert "message" in intent.entities or "time" in intent.entities
 
-    def test_classify_reminder_set_at_time(
-        self, classifier: IntentClassifier
-    ) -> None:
+    def test_classify_reminder_set_at_time(self, classifier: IntentClassifier) -> None:
         """Test classifying reminder with specific time."""
         intent = classifier.classify("remind me to take medication at 3 PM")
         assert intent.type == IntentType.REMINDER_SET
@@ -132,9 +128,7 @@ class TestIntentClassifier:
         intent = classifier.classify("what is the capital of France")
         assert intent.type == IntentType.GENERAL_QUESTION
 
-    def test_classify_general_question_time(
-        self, classifier: IntentClassifier
-    ) -> None:
+    def test_classify_general_question_time(self, classifier: IntentClassifier) -> None:
         """Test classifying time question as general."""
         intent = classifier.classify("what time is it")
         assert intent.type == IntentType.GENERAL_QUESTION
