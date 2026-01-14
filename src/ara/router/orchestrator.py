@@ -884,7 +884,10 @@ class Orchestrator:
         now = datetime.now()
         # Format: "It's 3:45 PM"
         time_str = now.strftime("%-I:%M %p")
-        return f"It's {time_str}."
+        # Add warmth with user name if available
+        if self._user_name:
+            return f"It's {time_str}, {self._user_name}!"
+        return f"It's {time_str}!"
 
     def _handle_date_query(self) -> str:
         """Handle date query intent by returning the actual system date.
@@ -932,13 +935,13 @@ class Orchestrator:
         # Format the future time
         time_str = future.strftime("%-I:%M %p")
 
-        # Construct response
+        # Construct warm response
         if amount == 1:
             unit_name = "hour" if unit in ("hour", "hr") else "minute"
-            return f"In {amount} {unit_name}, it will be {time_str}."
+            return f"In {amount} {unit_name}, it'll be {time_str}!"
         else:
             unit_name = "hours" if unit in ("hour", "hr") else "minutes"
-            return f"In {amount} {unit_name}, it will be {time_str}."
+            return f"In {amount} {unit_name}, it'll be {time_str}!"
 
     def _on_timer_expire(self, timer: "Timer") -> None:
         """Callback when a timer expires."""
