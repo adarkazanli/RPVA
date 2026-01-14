@@ -33,6 +33,10 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
+if TYPE_CHECKING:
+    from ..config import WakeWordConfig
+
+
 class PorcupineWakeWordDetector:
     """Wake word detector using Picovoice Porcupine.
 
@@ -40,10 +44,16 @@ class PorcupineWakeWordDetector:
     for edge devices like Raspberry Pi.
     """
 
-    def __init__(self, access_key: str | None = None) -> None:
+    def __init__(
+        self,
+        config: "WakeWordConfig | None" = None,
+        access_key: str | None = None,
+    ) -> None:
         """Initialize Porcupine detector.
 
         Args:
+            config: Optional wake word configuration. If provided, initializes
+                   with the configured keyword, sensitivity, and model_path.
             access_key: Picovoice access key. If not provided, will look for
                        PICOVOICE_ACCESS_KEY environment variable.
 
@@ -57,6 +67,14 @@ class PorcupineWakeWordDetector:
         self._porcupine = None
         self._keywords: list[str] = []
         self._sensitivity: float = 0.5
+        self._model_path: str | None = None
+
+        # Apply config if provided
+        if config is not None:
+            self._model_path = config.model_path
+            # Auto-initialize if access key is available
+            if self._access_key:
+                self.initialize(keywords=[config.keyword], sensitivity=config.sensitivity)
 
     def initialize(self, keywords: list[str], sensitivity: float) -> None:
         """Initialize Porcupine with keywords.
