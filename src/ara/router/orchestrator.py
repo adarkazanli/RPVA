@@ -457,6 +457,8 @@ class Orchestrator:
             return self._handle_time_query()
         elif intent.type == IntentType.DATE_QUERY:
             return self._handle_date_query()
+        elif intent.type == IntentType.FUTURE_TIME_QUERY:
+            return self._handle_future_time_query(intent)
         else:
             # Default to LLM for general questions
             if self._llm is None:
@@ -901,6 +903,42 @@ class Orchestrator:
         suffix = "th" if 10 <= day % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(day % 10, "th")
 
         return f"Today is {day_name}, {month_name} {day}{suffix}, {year}."
+
+    def _handle_future_time_query(self, intent: Intent) -> str:
+        """Handle future time query intent by calculating the time offset.
+
+        Args:
+            intent: Classified intent with amount and unit entities.
+
+        Returns:
+            Response text with calculated future time.
+        """
+        amount_str = intent.entities.get("amount", "1")
+        unit = intent.entities.get("unit", "hour")
+
+        try:
+            amount = int(amount_str)
+        except ValueError:
+            amount = 1
+
+        now = datetime.now()
+
+        # Calculate the future time
+        if unit in ("hour", "hr"):
+            future = now + timedelta(hours=amount)
+        else:  # minute, min
+            future = now + timedelta(minutes=amount)
+
+        # Format the future time
+        time_str = future.strftime("%-I:%M %p")
+
+        # Construct response
+        if amount == 1:
+            unit_name = "hour" if unit in ("hour", "hr") else "minute"
+            return f"In {amount} {unit_name}, it will be {time_str}."
+        else:
+            unit_name = "hours" if unit in ("hour", "hr") else "minutes"
+            return f"In {amount} {unit_name}, it will be {time_str}."
 
     def _on_timer_expire(self, timer: "Timer") -> None:
         """Callback when a timer expires."""

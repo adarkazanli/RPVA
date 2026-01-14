@@ -14,6 +14,7 @@ class IntentType(Enum):
     GENERAL_QUESTION = "general_question"
     TIME_QUERY = "time_query"
     DATE_QUERY = "date_query"
+    FUTURE_TIME_QUERY = "future_time_query"
     TIMER_SET = "timer_set"
     TIMER_CANCEL = "timer_cancel"
     TIMER_QUERY = "timer_query"
@@ -159,6 +160,32 @@ class IntentClassifier:
         r"today'?s\s+date",
     ]
 
+    # Future time query patterns (what time will it be in X hours/minutes)
+    # Supports both numeric (1, 2) and word form (one, two) numbers
+    FUTURE_TIME_QUERY_PATTERNS = [
+        r"what\s+time\s+will\s+it\s+be\s+in\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s*(hour|hr|minute|min)s?",
+        r"what\s+will\s+(?:the\s+)?time\s+be\s+in\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s*(hour|hr|minute|min)s?",
+        r"in\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s*(hour|hr|minute|min)s?\s+what\s+time\s+will\s+it\s+be",
+        r"time\s+in\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s*(hour|hr|minute|min)s?",
+        r"(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s*(hour|hr|minute|min)s?\s+from\s+now",
+    ]
+
+    # Word number to digit mapping
+    WORD_NUMBERS = {
+        "one": 1,
+        "two": 2,
+        "three": 3,
+        "four": 4,
+        "five": 5,
+        "six": 6,
+        "seven": 7,
+        "eight": 8,
+        "nine": 9,
+        "ten": 10,
+        "eleven": 11,
+        "twelve": 12,
+    }
+
     def __init__(self) -> None:
         """Initialize the classifier."""
         # Pre-compile patterns for efficiency
@@ -179,6 +206,9 @@ class IntentClassifier:
         self._user_name_set = [re.compile(p, re.IGNORECASE) for p in self.USER_NAME_SET_PATTERNS]
         self._time_query = [re.compile(p, re.IGNORECASE) for p in self.TIME_QUERY_PATTERNS]
         self._date_query = [re.compile(p, re.IGNORECASE) for p in self.DATE_QUERY_PATTERNS]
+        self._future_time_query = [
+            re.compile(p, re.IGNORECASE) for p in self.FUTURE_TIME_QUERY_PATTERNS
+        ]
 
     def classify(self, text: str) -> Intent:
         """Classify the given text into an intent.
@@ -232,6 +262,10 @@ class IntentClassifier:
 
         # User name set
         if intent := self._try_user_name_set(text):
+            return intent
+
+        # Future time query - check before time query (more specific)
+        if intent := self._try_future_time_query(text):
             return intent
 
         # Time query - check before general questions
@@ -462,6 +496,32 @@ class IntentClassifier:
                     type=IntentType.DATE_QUERY,
                     confidence=0.95,
                     entities={},
+                    raw_text=text,
+                )
+        return None
+
+    def _try_future_time_query(self, text: str) -> Intent | None:
+        """Try to match future time query patterns."""
+        for pattern in self._future_time_query:
+            match = pattern.search(text)
+            if match:
+                entities = {}
+                groups = match.groups()
+
+                # Extract amount and unit
+                if groups and len(groups) >= 2:
+                    amount_str = groups[0].lower()
+                    # Convert word numbers to digits
+                    if amount_str in self.WORD_NUMBERS:
+                        entities["amount"] = str(self.WORD_NUMBERS[amount_str])
+                    else:
+                        entities["amount"] = amount_str
+                    entities["unit"] = groups[1].lower()
+
+                return Intent(
+                    type=IntentType.FUTURE_TIME_QUERY,
+                    confidence=0.95,
+                    entities=entities,
                     raw_text=text,
                 )
         return None
