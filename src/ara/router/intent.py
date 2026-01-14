@@ -139,6 +139,7 @@ class IntentClassifier:
     # Time query patterns - must be checked before general questions
     TIME_QUERY_PATTERNS = [
         r"what\s+time\s+is\s+it",
+        r"what\s+is\s+(?:the\s+)?(?:current\s+)?time",
         r"what'?s\s+the\s+time",
         r"what\s+time\s+do\s+you\s+have",
         r"what\s+time\s+(?:is\s+it\s+)?(?:right\s+)?now",
