@@ -62,7 +62,7 @@ def _log_interaction_timing(event: str, transcript: str = "") -> None:
         if transcript:
             # Truncate long transcripts
             short_transcript = transcript[:50] + "..." if len(transcript) > 50 else transcript
-            line = f"{timestamp}: Voice agent {event} -> \"{short_transcript}\"\n"
+            line = f'{timestamp}: Voice agent {event} -> "{short_transcript}"\n'
         else:
             line = f"{timestamp}: Voice agent {event}\n"
 
