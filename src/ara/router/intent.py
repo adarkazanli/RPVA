@@ -94,8 +94,9 @@ class IntentClassifier:
 
     REMINDER_QUERY_PATTERNS = [
         r"what\s+reminders?\s+(?:do\s+I\s+have|are\s+set)",
-        r"(?:list|show)\s+(?:my\s+)?reminders?",
+        r"(?:list|show|view)\s+(?:my\s+)?reminders?",
         r"check\s+(?:my\s+)?reminders?",
+        r"(?:what\s+are\s+)?my\s+reminders?",
     ]
 
     REMINDER_CLEAR_ALL_PATTERNS = [
@@ -135,7 +136,7 @@ class IntentClassifier:
     USER_NAME_SET_PATTERNS = [
         r"my\s+name\s+is\s+(\w+)",
         r"call\s+me\s+(\w+)",
-        r"set\s+my\s+name\s+to\s+(\w+)",
+        r"(?:set|change|update)\s+my\s+name\s+to\s+(\w+)",
         r"i'?m\s+(\w+)",  # Handle contractions like "I'm Ammar"
     ]
 
