@@ -239,10 +239,10 @@ def main() -> int:
         orchestrator = Orchestrator.from_config(config, use_mocks=use_mocks)
         logger.info("Components initialized successfully")
 
-        # Initialize MongoDB storage for time queries
+        # Initialize MongoDB storage for time queries and interaction logging
         mongo_client = None
         try:
-            from .storage.client import MongoStorageClient
+            from .storage.client import InteractionRepository, MongoStorageClient
             from .storage.events import ActivityRepository, EventRepository
 
             mongo_client = MongoStorageClient(
@@ -252,15 +252,17 @@ def main() -> int:
             mongo_client.connect()
 
             if mongo_client.is_connected():
-                # Create storage facade
+                # Create storage facade with all repositories
                 class _StorageFacade:
                     def __init__(self, mongo: MongoStorageClient):
                         self.events = EventRepository(mongo.database["events"])
                         self.activities = ActivityRepository(mongo.database["activities"])
+                        self.interactions = InteractionRepository(mongo.database["interactions"])
 
                 storage = _StorageFacade(mongo_client)
                 orchestrator.set_time_query_storage(storage)
-                logger.info("MongoDB storage connected")
+                orchestrator.set_interaction_storage(storage)
+                logger.info("MongoDB storage connected (events, activities, interactions)")
             else:
                 logger.warning("MongoDB not available - time queries will be disabled")
         except Exception as e:

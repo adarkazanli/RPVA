@@ -319,8 +319,11 @@ class IntentClassifier:
         r"(?:ended|stopped)\s+(?:my\s+)?(.+)",
         # Note/memo patterns
         r"(?:remember|note|memo)[,:\s]+(.+)",
-        r"(?:make\s+a\s+)?note[:\s]+(.+)",
+        r"(?:make\s+a\s+)?note[:\s]+(?!of\s+that)(.+)",  # Exclude "of that" back-reference
         r"(?:i\s+)?parked\s+(?:at|in|on)\s+(.+)",
+        # Location statements
+        r"(?:i'?m|i\s+am)\s+(?:at|in)\s+(.+?)(?:\s+right\s+now)?(?:\.|$)",
+        r"(?:i'?m|i\s+am)\s+(?:currently\s+)?(?:at|in)\s+(.+)",
     ]
 
     def __init__(self) -> None:

@@ -201,6 +201,9 @@ class Orchestrator:
         # Can be set later via set_time_query_storage() when MongoDB is available
         self._time_query_handler = TimeQueryCommandHandler(storage=None)
 
+        # Interaction storage (for logging all interactions to MongoDB)
+        self._interaction_storage: object | None = None
+
         # Background check thread for timers/reminders
         self._check_thread: threading.Thread | None = None
 
@@ -456,9 +459,35 @@ class Orchestrator:
         Returns:
             Response text
         """
+        from datetime import UTC, datetime
+
         interaction_id = uuid.uuid4()
         intent = self._intent_classifier.classify(text)
-        return self._handle_intent(intent, interaction_id)
+        response = self._handle_intent(intent, interaction_id)
+
+        # Log interaction to MongoDB if storage is available
+        if self._interaction_storage is not None:
+            try:
+                from ..storage.models import InteractionDTO
+
+                interaction = InteractionDTO(
+                    session_id=str(uuid.uuid4()),  # TODO: track session properly
+                    timestamp=datetime.now(UTC),
+                    device_id="voice-agent",
+                    transcript=text,
+                    transcript_confidence=1.0,
+                    intent_type=intent.type.value,
+                    intent_confidence=intent.confidence,
+                    response_text=response,
+                    response_source="local",
+                    latency_ms={},
+                    entities=intent.entities,
+                )
+                self._interaction_storage.interactions.save(interaction)  # type: ignore
+            except Exception as e:
+                logger.warning(f"Failed to log interaction: {e}")
+
+        return response
 
     def _handle_intent(self, intent: Intent, interaction_id: uuid.UUID) -> str:
         """Handle classified intent and generate response.
@@ -1350,6 +1379,14 @@ class Orchestrator:
             storage: Storage object with events and activities repositories.
         """
         self._time_query_handler = TimeQueryCommandHandler(storage=storage)  # type: ignore
+
+    def set_interaction_storage(self, storage: object) -> None:
+        """Set storage for interaction logging (call when MongoDB is available).
+
+        Args:
+            storage: Storage object with interactions repository.
+        """
+        self._interaction_storage = storage
 
     def _on_timer_expire(self, timer: "Timer") -> None:
         """Callback when a timer expires."""
