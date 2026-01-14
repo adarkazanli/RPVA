@@ -10,11 +10,19 @@ from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
-# Try to load environment variables
+# Try to load environment variables from project root
 try:
+    from pathlib import Path as _Path
+
     from dotenv import load_dotenv
 
-    load_dotenv()
+    # Find .env in project root (parent of src/)
+    _project_root = _Path(__file__).parent.parent.parent.parent
+    _env_file = _project_root / ".env"
+    if _env_file.exists():
+        load_dotenv(_env_file)
+    else:
+        load_dotenv()
 except ImportError:
     pass
 
