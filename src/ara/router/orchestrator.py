@@ -1085,9 +1085,8 @@ class Orchestrator:
 
         self._countdown_in_progress = True
 
-        # Mark all reminders as being counted down
-        for reminder in reminders:
-            self._countdown_active[reminder.id] = True
+        # Note: reminders are already marked in _countdown_active by the caller
+        # to prevent race conditions with check_due()
 
         try:
             # Calculate starting number based on first reminder
@@ -1139,6 +1138,12 @@ class Orchestrator:
                 if self._feedback:
                     self._feedback.play(FeedbackType.REMINDER_ALERT)
 
+                # Mark reminders as triggered so check_due doesn't announce again
+                for reminder in reminders:
+                    reminder.status = ReminderStatus.TRIGGERED
+                    reminder.triggered_at = datetime.now(UTC)
+                self._reminder_manager._save()
+
         finally:
             self._countdown_in_progress = False
             # Clean up tracking entries now that countdown is complete
@@ -1182,9 +1187,8 @@ class Orchestrator:
 
         self._countdown_in_progress = True
 
-        # Mark all timers as being counted down
-        for timer in timers:
-            self._countdown_active[timer.id] = True
+        # Note: timers are already marked in _countdown_active by the caller
+        # to prevent race conditions with check_expired()
 
         try:
             # Calculate starting number based on first timer
@@ -1406,6 +1410,10 @@ class Orchestrator:
                 if not self._countdown_in_progress:
                     upcoming_timers = self._get_upcoming_timers(5)
                     if upcoming_timers:
+                        # Mark as being counted down BEFORE starting thread
+                        # to prevent race condition with check_expired()
+                        for timer in upcoming_timers:
+                            self._countdown_active[timer.id] = True
                         # Start countdown in a separate thread to not block
                         countdown_thread = threading.Thread(
                             target=self._start_timer_countdown,
@@ -1421,6 +1429,10 @@ class Orchestrator:
                 if not self._countdown_in_progress:
                     upcoming_reminders = self._get_upcoming_reminders(5)
                     if upcoming_reminders:
+                        # Mark as being counted down BEFORE starting thread
+                        # to prevent race condition with check_due()
+                        for reminder in upcoming_reminders:
+                            self._countdown_active[reminder.id] = True
                         # Start countdown in a separate thread to not block
                         countdown_thread = threading.Thread(
                             target=self._start_countdown,

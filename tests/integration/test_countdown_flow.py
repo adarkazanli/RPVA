@@ -87,6 +87,9 @@ class TestCompleteCountdownFlow:
         # Set fast countdown interval for testing
         orchestrator._countdown_interval = 0.01
 
+        # Mark reminder as active (normally done by caller)
+        orchestrator._countdown_active[reminder.id] = True
+
         # Start countdown
         orchestrator._start_countdown([reminder])
 
@@ -100,8 +103,10 @@ class TestCompleteCountdownFlow:
         last_call = calls[-1]
         assert "now" in str(last_call).lower()
 
-    def test_countdown_marks_reminder_active(self, orchestrator: Orchestrator) -> None:
-        """Test that countdown marks reminders as active during countdown."""
+    def test_countdown_marks_reminder_triggered(self, orchestrator: Orchestrator) -> None:
+        """Test that countdown marks reminders as triggered after completion."""
+        from ara.commands.reminder import ReminderStatus
+
         reminder = orchestrator._reminder_manager.create(
             message="check email",
             remind_at=datetime.now(UTC) + timedelta(seconds=5),
@@ -111,11 +116,16 @@ class TestCompleteCountdownFlow:
         # Set fast countdown for testing
         orchestrator._countdown_interval = 0.01
 
+        # Mark reminder as active (normally done by caller)
+        orchestrator._countdown_active[reminder.id] = True
+
         # Start countdown
         orchestrator._start_countdown([reminder])
 
-        # After countdown completes, reminder should be marked as active
-        assert reminder.id in orchestrator._countdown_active
+        # After countdown completes, reminder should be marked as triggered
+        assert reminder.status == ReminderStatus.TRIGGERED
+        # And cleaned up from active tracking
+        assert reminder.id not in orchestrator._countdown_active
 
 
 class TestCountdownCancellation:
@@ -285,6 +295,8 @@ class TestOverlappingTimersCombinedCountdown:
 
     def test_combined_countdown_single_sequence(self, orchestrator: Orchestrator) -> None:
         """Test that combined reminders share a single countdown sequence."""
+        from ara.commands.reminder import ReminderStatus
+
         now = datetime.now(UTC)
 
         reminder1 = orchestrator._reminder_manager.create(
@@ -301,12 +313,16 @@ class TestOverlappingTimersCombinedCountdown:
         # Set fast interval for testing
         orchestrator._countdown_interval = 0.01
 
+        # Mark reminders as active (normally done by caller)
+        orchestrator._countdown_active[reminder1.id] = True
+        orchestrator._countdown_active[reminder2.id] = True
+
         # Start countdown for both
         orchestrator._start_countdown([reminder1, reminder2])
 
-        # Both should be marked as active
-        assert orchestrator._countdown_active.get(reminder1.id) is True
-        assert orchestrator._countdown_active.get(reminder2.id) is True
+        # Both should be marked as triggered after countdown completes
+        assert reminder1.status == ReminderStatus.TRIGGERED
+        assert reminder2.status == ReminderStatus.TRIGGERED
 
         # The intro phrase should contain both tasks
         first_call = orchestrator._synthesizer.synthesize.call_args_list[0]
