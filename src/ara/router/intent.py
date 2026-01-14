@@ -173,6 +173,9 @@ class IntentClassifier:
         r"(?:what(?:'s|'s|\s+is)\s+)?(?:the\s+)?distance\s+(?:between|from)\s+(.+)",
         r"how\s+far\s+(?:is\s+it\s+)?(?:from\s+)?(.+?)(?:\s+to\s+.+)?",
         r"how\s+(?:long|far)\s+(?:does\s+it\s+take|is\s+it)\s+(?:to\s+)?(?:drive|get|travel)\s+(?:from\s+)?(.+)",
+        r"(?:how\s+)?(?:do\s+I\s+)?(?:get|drive)\s+to\s+(.+?)(?:\s+from\s+.+)?",
+        r"directions?\s+(?:to|from)\s+(.+)",
+        r"drive\s+(?:from\s+)?(.+?)\s+to\s+(.+)",
     ]
 
     # System command patterns
