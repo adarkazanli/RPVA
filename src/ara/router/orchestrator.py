@@ -42,6 +42,14 @@ from ..config.user_profile import load_user_profile
 from ..feedback import FeedbackType
 from ..search import create_search_client
 from .intent import Intent, IntentClassifier, IntentType
+from .query_router import (
+    FALLBACK_CAVEAT,
+    NOT_FOUND_MESSAGES,
+    DataSource,
+    QueryRouter,
+    QueryType,
+    RoutingDecision,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -188,6 +196,7 @@ class Orchestrator:
 
         # Intent classification and command handling
         self._intent_classifier = IntentClassifier()
+        self._query_router = QueryRouter()
         self._timer_manager = TimerManager(on_expire=self._on_timer_expire)
         self._reminder_manager = ReminderManager(
             on_trigger=self._on_reminder_trigger,
@@ -445,7 +454,9 @@ class Orchestrator:
                         timestamp=datetime.now(UTC),
                         device_id="voice-agent",
                         transcript=transcript,
-                        transcript_confidence=transcript_result.confidence if hasattr(transcript_result, 'confidence') else 1.0,
+                        transcript_confidence=transcript_result.confidence
+                        if hasattr(transcript_result, "confidence")
+                        else 1.0,
                         intent_type=intent.type.value,
                         intent_confidence=intent.confidence,
                         response_text=response_text,
@@ -563,25 +574,172 @@ class Orchestrator:
         elif intent.type == IntentType.EVENT_LOG:
             return self._handle_event_log(intent, interaction_id)
         else:
-            # Default to LLM for general questions
-            if self._llm is None:
-                return "I'm not able to process that request right now."
+            # Use QueryRouter for smart routing of general questions
+            routing_decision = self._query_router.classify(intent.raw_text)
+            logger.debug(
+                f"QueryRouter decision: {routing_decision.query_type.value} -> "
+                f"{routing_decision.primary_source.value} "
+                f"(confidence: {routing_decision.confidence:.2f})"
+            )
 
-            # Inject current time context for the LLM
-            now = datetime.now()
-            time_str = now.strftime("%-I:%M %p")
-            date_str = now.strftime("%A, %B %d, %Y")
-            context = f"[Current time: {time_str}, {date_str}]"
+            # Route based on query type
+            if routing_decision.query_type == QueryType.PERSONAL_DATA:
+                return self._handle_personal_query(intent, routing_decision)
+            elif routing_decision.query_type == QueryType.FACTUAL_CURRENT:
+                return self._handle_factual_query(intent, routing_decision)
+            else:
+                # GENERAL_KNOWLEDGE or default - use LLM
+                return self._handle_general_knowledge_query(intent)
 
-            # Add user name context if available
-            if self._user_name:
-                context += f" [User's name: {self._user_name}]"
+    def _handle_personal_query(self, intent: Intent, _routing_decision: RoutingDecision) -> str:
+        """Handle personal data query by checking MongoDB first.
 
-            # Combine context with user query
-            query_with_context = f"{context}\n\nUser: {intent.raw_text}"
+        Routes queries about user's personal data (activities, history, notes)
+        to MongoDB. Returns "not found" message if no data exists - never
+        falls back to LLM to prevent hallucination of personal information.
 
-            llm_response = self._llm.generate(query_with_context)
-            return llm_response.text.strip()
+        Args:
+            intent: Classified intent with raw query text.
+            _routing_decision: Routing decision from QueryRouter (reserved for future use).
+
+        Returns:
+            Response text with personal data or "not found" message.
+        """
+        query = intent.raw_text.lower()
+
+        # Try to query MongoDB for personal data
+        if self._interaction_storage is not None:
+            try:
+                # Search interactions collection for relevant data
+                collection = self._interaction_storage.interactions._collection  # type: ignore
+                docs = list(collection.find().sort("timestamp", -1).limit(50))
+
+                # Look for relevant entries based on query content
+                for doc in docs:
+                    transcript = doc.get("input", {}).get("transcript", "")
+                    # Simple keyword matching for now
+                    if any(word in transcript.lower() for word in query.split() if len(word) > 3):
+                        # Found potentially relevant data
+                        ts = doc.get("timestamp")
+                        if ts:
+                            time_diff = datetime.now(UTC) - ts
+                            minutes = int(time_diff.total_seconds() / 60)
+                            if minutes < 60:
+                                return f"I found a related entry from {minutes} minutes ago: {transcript[:100]}..."
+                            else:
+                                hours = minutes // 60
+                                return f"I found a related entry from {hours} hours ago: {transcript[:100]}..."
+
+                logger.debug("No matching personal data found in MongoDB")
+            except Exception as e:
+                logger.warning(f"Failed to query MongoDB for personal data: {e}")
+                return NOT_FOUND_MESSAGES.get("default", "I don't have any records of that.")
+
+        # Determine appropriate "not found" message based on query content
+        if "exercise" in query or "workout" in query or "gym" in query:
+            return NOT_FOUND_MESSAGES.get("exercise", NOT_FOUND_MESSAGES["default"])
+        elif "meeting" in query:
+            return NOT_FOUND_MESSAGES.get("meeting", NOT_FOUND_MESSAGES["default"])
+        elif "mention" in query or "said" in query or "asked" in query:
+            return NOT_FOUND_MESSAGES.get("mention", NOT_FOUND_MESSAGES["default"])
+        else:
+            return NOT_FOUND_MESSAGES.get("default", "I don't have any records of that.")
+
+    def _handle_factual_query(self, intent: Intent, routing_decision: RoutingDecision) -> str:
+        """Handle factual/time-sensitive query using web search.
+
+        Routes queries about verifiable facts (weather, prices, news, distances)
+        to web search first. Falls back to LLM with caveat if search fails.
+
+        Args:
+            intent: Classified intent with raw query text.
+            routing_decision: Routing decision from QueryRouter.
+
+        Returns:
+            Response text with factual data or fallback response with caveat.
+        """
+        query = intent.raw_text.strip().rstrip("?!.")
+
+        try:
+            # Use web search for factual queries
+            result = self._search_client.search(query, max_results=3, include_answer=True)
+
+            if result.success and result.answer:
+                # Direct answer from search
+                answer = result.answer
+                if len(answer) > 250:
+                    answer = answer[:247] + "..."
+
+                # Add user name greeting if available
+                if self._user_name:
+                    return f"{self._user_name}, {answer}"
+                return answer
+
+            if result.success and result.results:
+                # Summarize search results
+                summaries = []
+                for r in result.results[:3]:
+                    content = r.get("content", "")
+                    if content:
+                        summaries.append(content[:80])
+
+                if summaries:
+                    combined = " ".join(summaries)
+                    if len(combined) > 250:
+                        combined = combined[:247] + "..."
+
+                    if self._user_name:
+                        return f"{self._user_name}, {combined}"
+                    return combined
+
+            # Search succeeded but no useful results - fall back to LLM with caveat
+            logger.info("Web search returned no useful results, falling back to LLM with caveat")
+
+        except Exception as e:
+            logger.warning(f"Web search failed: {e}, falling back to LLM with caveat")
+
+        # Fallback to LLM with caveat (if enabled in routing decision)
+        if routing_decision.fallback_source == DataSource.LLM and self._llm:
+            llm_response = self._llm.generate(intent.raw_text)
+            response_text = llm_response.text.strip()
+
+            # Add caveat prefix if routing decision says we should
+            if routing_decision.should_caveat:
+                return f"{FALLBACK_CAVEAT}{response_text}"
+            return response_text
+
+        return "I couldn't find that information right now."
+
+    def _handle_general_knowledge_query(self, intent: Intent) -> str:
+        """Handle general knowledge query using LLM directly.
+
+        Routes queries about static knowledge (definitions, how-to, math)
+        directly to the LLM for fast responses.
+
+        Args:
+            intent: Classified intent with raw query text.
+
+        Returns:
+            Response text from LLM.
+        """
+        if self._llm is None:
+            return "I'm not able to process that request right now."
+
+        # Inject current time context for the LLM
+        now = datetime.now()
+        time_str = now.strftime("%-I:%M %p")
+        date_str = now.strftime("%A, %B %d, %Y")
+        context = f"[Current time: {time_str}, {date_str}]"
+
+        # Add user name context if available
+        if self._user_name:
+            context += f" [User's name: {self._user_name}]"
+
+        # Combine context with user query
+        query_with_context = f"{context}\n\nUser: {intent.raw_text}"
+
+        llm_response = self._llm.generate(query_with_context)
+        return llm_response.text.strip()
 
     def _handle_timer_set(self, intent: Intent, interaction_id: uuid.UUID) -> str:
         """Handle timer set intent."""
@@ -946,9 +1104,15 @@ class Orchestrator:
                         if "captured ->" in line:
                             try:
                                 timestamp_str = (
-                                    line.split(":")[0] + ":" + line.split(":")[1] + ":" + line.split(":")[2]
+                                    line.split(":")[0]
+                                    + ":"
+                                    + line.split(":")[1]
+                                    + ":"
+                                    + line.split(":")[2]
                                 )
-                                timestamp = datetime.strptime(timestamp_str.strip(), "%Y-%m-%d %H:%M:%S")
+                                timestamp = datetime.strptime(
+                                    timestamp_str.strip(), "%Y-%m-%d %H:%M:%S"
+                                )
                                 content = line.split('-> "')[1].rstrip('"\n')
                                 entries.append({"timestamp": timestamp, "content": content})
                             except (IndexError, ValueError):
@@ -1018,7 +1182,10 @@ class Orchestrator:
                 if not isinstance(entry_timestamp, datetime):
                     continue
                 # Skip the current query itself (avoid matching "asked about X" with itself)
-                if "asked" in entry_content.lower() and search_content.lower()[:20] in entry_content.lower():
+                if (
+                    "asked" in entry_content.lower()
+                    and search_content.lower()[:20] in entry_content.lower()
+                ):
                     continue
                 if fuzzy_match(search_content, entry_content):
                     # Ensure timezone awareness for comparison
