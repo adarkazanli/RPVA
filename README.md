@@ -56,12 +56,14 @@ PYTHONPATH=src python -m ara --profile dev
 | **Web Search** | "**With internet**, what's the weather?" | Search the web |
 | | "**Search online** for best restaurants" | Web search |
 | | "**Check the news** about stocks" | News search |
-| **Notes** | "**Remember that** I met John about X" | Capture note |
-| | "**Note that** I need to call Sarah" | Capture note |
+| **Notes** | "**Take note** I met John about X" | Capture note |
+| | "**Remember that** I need to call Sarah" | Capture note |
+| | "**Note that** the deadline is Friday" | Capture note |
 | | "**What did I say about** the meeting?" | Query notes |
 | **Action Items** | "**List my action items** for today" | Show today's tasks |
 | | "**What do I need to do** today?" | Show today's tasks |
 | | "**Email me my action items**" | Send tasks to email |
+| | "**Send my action items**" | Send tasks to email |
 | **Time Tracking** | "**Starting** work on the report" | Start timer |
 | | "**Done with** the report" | Stop timer |
 | | "**How did I spend my time** today?" | Daily summary |
