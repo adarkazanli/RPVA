@@ -15,9 +15,13 @@ ollama serve
 # 3. Download models (Whisper STT + Piper TTS)
 ./scripts/download_models.sh
 
-# 4. Set up Picovoice API key (for wake word detection)
-#    Get a free key at https://console.picovoice.ai/
-echo "PICOVOICE_ACCESS_KEY=your_key_here" > .env
+# 4. Set up API keys
+#    - Picovoice: Get a free key at https://console.picovoice.ai/
+#    - Tavily (optional): Get a free key at https://tavily.com/ for web search
+cat > .env << 'EOF'
+PICOVOICE_ACCESS_KEY=your_picovoice_key_here
+TAVILY_API_KEY=your_tavily_key_here
+EOF
 
 # 5. Run Ara
 PYTHONPATH=src python -m ara --profile dev
@@ -38,6 +42,52 @@ PYTHONPATH=src python -m ara --profile dev
 - **Time Tracking**: Track activity duration with start/stop commands
 - **Daily/Weekly Digests**: Get summaries of how you spend your time
 
+## Web Search Setup (Tavily)
+
+Ara uses [Tavily](https://tavily.com/) for real-time web search, optimized for AI assistants with clean, summarized results.
+
+### Getting Your API Key
+
+1. Visit [https://tavily.com/](https://tavily.com/)
+2. Sign up for a free account (1,000 searches/month free tier)
+3. Copy your API key from the dashboard
+
+### Configuration
+
+Add your Tavily API key to the `.env` file:
+
+```bash
+# Add to .env file
+echo "TAVILY_API_KEY=tvly-your-api-key-here" >> .env
+```
+
+Or set it as an environment variable:
+
+```bash
+export TAVILY_API_KEY=tvly-your-api-key-here
+```
+
+### Usage
+
+Trigger web search with these **keywords**:
+
+| Trigger Phrase | Example |
+|----------------|---------|
+| `with internet` | "Porcupine, **with internet**, what's the weather in Tokyo?" |
+| `search online` | "Porcupine, **search online** for best restaurants nearby" |
+| `look up` | "Porcupine, **look up** the latest iPhone specs" |
+| `check the news` | "Porcupine, **check the news** about the stock market" |
+| `current` / `latest` | "Porcupine, what's the **current** price of Bitcoin?" |
+
+### Features
+
+- **AI-Optimized Results**: Tavily returns clean, summarized content perfect for voice responses
+- **Fast Response**: Typical search latency < 2 seconds
+- **Graceful Fallback**: If no API key is set, Ara falls back to a mock client (returns "search unavailable")
+- **Smart Routing**: Only queries with trigger phrases use web search; others stay fully offline
+
+> **Note:** Web search is optional. Without a Tavily API key, Ara works fully offline for all other features.
+
 ## Architecture
 
 | Component | Technology | Purpose | Target Latency |
@@ -45,7 +95,7 @@ PYTHONPATH=src python -m ara --profile dev
 | **STT** | faster-whisper (small) | Speech-to-Text | < 1.5s |
 | **LLM** | Gemma 2 2B via Ollama | Response Generation | < 4s |
 | **TTS** | Piper (medium voice) | Text-to-Speech | < 0.5s |
-| **Search** | DuckDuckGo | Optional Web Search | < 3s |
+| **Search** | Tavily API | Optional Web Search | < 2s |
 
 ## Hardware Requirements
 
