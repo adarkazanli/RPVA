@@ -12,10 +12,13 @@ source venv/bin/activate
 # 2. Start Ollama (in a separate terminal)
 ollama serve
 
-# 3. Download models (Whisper STT + Piper TTS)
+# 3. Start MongoDB (for notes & time tracking)
+cd docker && docker-compose up -d && cd ..
+
+# 4. Download models (Whisper STT + Piper TTS)
 ./scripts/download_models.sh
 
-# 4. Set up API keys
+# 5. Set up API keys
 #    - Picovoice: Get a free key at https://console.picovoice.ai/
 #    - Tavily (optional): Get a free key at https://tavily.com/ for web search
 cat > .env << 'EOF'
@@ -23,7 +26,7 @@ PICOVOICE_ACCESS_KEY=your_picovoice_key_here
 TAVILY_API_KEY=your_tavily_key_here
 EOF
 
-# 5. Run Ara
+# 6. Run Ara
 PYTHONPATH=src python -m ara --profile dev
 ```
 
@@ -174,8 +177,9 @@ echo "PICOVOICE_ACCESS_KEY=your_key_here" > .env
 #### Running on macOS
 
 ```bash
-# Start Ollama service (in a separate terminal)
-ollama serve
+# Start required services
+ollama serve                              # In terminal 1
+cd docker && docker-compose up -d && cd .. # Start MongoDB
 
 # Run the voice assistant
 source venv/bin/activate
@@ -284,8 +288,9 @@ PYTHONPATH=src python -m ara --dry-run --profile prod
 #### Step 5: Running the Assistant
 
 ```bash
-# Start Ollama service
+# Start required services
 sudo systemctl start ollama
+cd ~/RPVA/docker && docker-compose up -d   # Start MongoDB
 
 # Run the assistant
 source venv/bin/activate

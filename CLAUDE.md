@@ -9,6 +9,10 @@ Auto-generated from all feature plans. Last updated: 2026-01-12
 - JSON file (`~/.ara/user_profile.json`) for user profile (003-timer-countdown)
 - Python 3.11+ + pymongo (MongoDB driver), motor (async driver), Docker (004-mongodb-data-store)
 - MongoDB 7.0+ (local Docker container) (004-mongodb-data-store)
+- Python 3.11+ + Existing codebase (ara.router, ara.storage, ara.search) (006-smart-query-routing)
+- MongoDB (existing) for personal data queries (006-smart-query-routing)
+- Python 3.11+ + Existing codebase (ara.router, ara.storage, ara.llm), Ollama for entity extraction (005-time-tracking-notes)
+- MongoDB (existing) - new collections for notes, activities (005-time-tracking-notes)
 
 - Python 3.11+ (001-ara-voice-assistant)
 
@@ -28,9 +32,9 @@ cd src [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECHNOLO
 Python 3.11+: Follow standard conventions
 
 ## Recent Changes
+- 005-time-tracking-notes: Added Python 3.11+ + Existing codebase (ara.router, ara.storage, ara.llm), Ollama for entity extraction
+- 006-smart-query-routing: Added Python 3.11+ + Existing codebase (ara.router, ara.storage, ara.search)
 - 004-mongodb-data-store: Added Python 3.11+ + pymongo (MongoDB driver), motor (async driver), Docker
-- 003-timer-countdown: Added Python 3.11+ + Ollama (existing), standard library (threading, time, datetime)
-- 002-personality-timers: Added Python 3.11+ + Ollama (existing), standard library (json, pathlib, datetime)
 
 
 <!-- MANUAL ADDITIONS START -->
