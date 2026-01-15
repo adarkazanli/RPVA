@@ -633,6 +633,8 @@ class Orchestrator:
             return self._handle_digest_weekly(intent)
         elif intent.type == IntentType.ACTION_ITEMS_QUERY:
             return self._handle_action_items(intent)
+        elif intent.type == IntentType.EMAIL_ACTION_ITEMS:
+            return self._handle_email_action_items(intent)
         else:
             # Use QueryRouter for smart routing of general questions
             routing_decision = self._query_router.classify(intent.raw_text)
@@ -1989,6 +1991,78 @@ class Orchestrator:
         else:
             items_list = ", ".join(action_items[:-1])
             return f"{greeting} {items_list}, and {action_items[-1]}."
+
+    def _handle_email_action_items(self, intent: Intent) -> str:
+        """Handle email action items intent ('email me my action items').
+
+        Args:
+            intent: Classified intent with optional date_ref entity.
+
+        Returns:
+            Verbal response confirming email sent or explaining failure.
+        """
+        from datetime import date, timedelta
+
+        from ara.email.config import EmailConfig
+        from ara.email.sender import SMTPEmailSender
+
+        logger.info("Email action items requested")
+
+        # Load email configuration
+        config = EmailConfig.from_env()
+        if config is None or not config.is_valid():
+            return (
+                "Email is not configured. "
+                "Please set up your email settings in the configuration file."
+            )
+
+        # Determine which date to query
+        date_ref = intent.entities.get("date_ref", "").lower()
+        if date_ref == "yesterday":
+            target_date = date.today() - timedelta(days=1)
+            date_label = "yesterday"
+        else:
+            target_date = date.today()
+            date_label = "today"
+
+        logger.info(f"Fetching action items for {date_label} ({target_date})")
+
+        # Check if we have note data source
+        if not self._note_data_source:
+            return "I don't have any action items tracked yet."
+
+        # Fetch action items from notes
+        notes = self._note_data_source.get_notes_for_date(target_date, "default")
+
+        action_items: list[str] = []
+        for note in notes:
+            items = note.get("action_items", [])
+            action_items.extend(items)
+
+        if not action_items:
+            if date_label == "yesterday":
+                return "You don't have any action items from yesterday to send."
+            return "You don't have any action items to send."
+
+        # Send email
+        sender = SMTPEmailSender(config)
+        result = sender.send_action_items(action_items, date_label, target_date)
+
+        # Return appropriate verbal response
+        if result.success:
+            return "Done! I've sent your action items to your email."
+        elif result.error_message == "Could not authenticate with email server.":
+            return (
+                "I couldn't authenticate with the email server. "
+                "Please check your email credentials."
+            )
+        elif result.error_message == "Could not connect to email server.":
+            return (
+                "I couldn't connect to the email server. "
+                "Please check your internet connection and try again."
+            )
+        else:
+            return "I wasn't able to send the email. Please try again later."
 
     def set_time_query_storage(self, storage: object) -> None:
         """Set storage for time queries (call when MongoDB is available).
