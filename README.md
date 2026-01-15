@@ -56,7 +56,7 @@ PYTHONPATH=src python -m ara --profile dev
 | **Web Search** | "**With internet**, what's the weather?" | Search the web |
 | | "**Search online** for best restaurants" | Web search |
 | | "**Check the news** about stocks" | News search |
-| **Notes** | "**Take note** I met John about X" | Capture note |
+| **Notes** | "**Take note** I met John about X... **porcupine**" | Capture note (say wake word to end) |
 | | "**Remember that** I need to call Sarah" | Capture note |
 | | "**Note that** the deadline is Friday" | Capture note |
 | | "**What did I say about** the meeting?" | Query notes |

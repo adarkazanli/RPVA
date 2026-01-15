@@ -235,7 +235,7 @@ class Orchestrator:
         self._note_silence_timeout_ms = 10000  # 10s silence for notes (user can pause to think)
         self._note_max_recording_ms = 180000  # 3 minute max for notes
         self._note_trigger_phrases = ["take note", "take a note", "note that", "remember that"]
-        self._stop_keyword = "done porcupine"  # Keyword to end note recording
+        self._stop_keyword = "porcupine"  # Say wake word to end note recording early
 
         # Load personality configuration
         self._personality = get_default_personality()
@@ -2466,12 +2466,14 @@ class Orchestrator:
         self,
         silence_timeout_ms: int | None = None,
         max_recording_ms: int | None = None,
+        stop_on_wake_word: bool = False,
     ) -> bytes:
         """Record user speech until silence detected.
 
         Args:
             silence_timeout_ms: Override silence timeout (default: self._silence_timeout_ms)
             max_recording_ms: Override max recording time (default: self._max_recording_ms)
+            stop_on_wake_word: If True, stop recording when wake word is detected
 
         Returns:
             Recorded audio bytes
@@ -2493,6 +2495,13 @@ class Orchestrator:
         try:
             for chunk in self._capture.stream():
                 audio_buffer += chunk.data
+
+                # Check for wake word to stop note recording (say "porcupine" to end)
+                if stop_on_wake_word and self._wake_detector:
+                    wake_result = self._wake_detector.process(chunk.data)
+                    if wake_result >= 0:
+                        logger.info("Wake word detected during note recording, stopping")
+                        break
 
                 # Check for silence (simple energy-based detection)
                 energy = self._calculate_energy(chunk.data)
@@ -2562,11 +2571,13 @@ class Orchestrator:
         # Check if note-taking mode
         if self._is_note_trigger(initial_text):
             logger.info("Note-taking mode detected, extending recording...")
+            logger.info("Say the wake word (e.g., 'porcupine') when done to end early")
 
-            # Phase 2: Continue with extended recording
+            # Phase 2: Continue with extended recording (wake word stops recording)
             extended_audio = self._record_speech(
                 silence_timeout_ms=self._note_silence_timeout_ms,
                 max_recording_ms=self._note_max_recording_ms,
+                stop_on_wake_word=True,
             )
 
             # Combine audio
