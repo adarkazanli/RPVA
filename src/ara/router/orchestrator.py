@@ -231,8 +231,8 @@ class Orchestrator:
         self._silence_timeout_ms = 2000  # Stop recording after 2s silence
         self._max_recording_ms = 10000  # Max 10s recording
 
-        # Recording configuration - note-taking mode
-        self._note_silence_timeout_ms = 5000  # 5s silence for notes
+        # Recording configuration - note-taking mode (patient, no interruption)
+        self._note_silence_timeout_ms = 10000  # 10s silence for notes (user can pause to think)
         self._note_max_recording_ms = 180000  # 3 minute max for notes
         self._note_trigger_phrases = ["take note", "take a note", "note that", "remember that"]
         self._stop_keyword = "done porcupine"  # Keyword to end note recording
@@ -2542,10 +2542,11 @@ class Orchestrator:
         if not self._capture or not self._transcriber:
             return b"", False
 
-        # Phase 1: Quick recording to detect mode (3 seconds max, 1.5s silence)
+        # Phase 1: Quick recording to detect mode (4 seconds max, 2.5s silence)
+        # More lenient to allow user to say "take note" and pause briefly
         initial_audio = self._record_speech(
-            silence_timeout_ms=1500,
-            max_recording_ms=3000,
+            silence_timeout_ms=2500,
+            max_recording_ms=4000,
         )
 
         if not initial_audio:
