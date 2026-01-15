@@ -758,6 +758,21 @@ class IntentClassifier:
 
     def _try_web_search(self, text: str) -> Intent | None:
         """Try to match web search patterns."""
+        text_lower = text.lower()
+
+        # Skip web search if query is about personal data (contains "me", "my", "I")
+        personal_indicators = [
+            r"\bme\b",
+            r"\bmy\b",
+            r"\bi\b",
+            r"\bmyself\b",
+            r"\bi've\b",
+            r"\bi'm\b",
+        ]
+        for indicator in personal_indicators:
+            if re.search(indicator, text_lower):
+                return None  # Let personal data handler catch this
+
         for pattern in self._web_search:
             match = pattern.search(text)
             if match:
