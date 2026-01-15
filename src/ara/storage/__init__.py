@@ -13,8 +13,15 @@ from .models import (
     EventDTO,
     EventType,
     InteractionDTO,
+    NoteDTO,
     TimeQueryResultDTO,
     TimeQueryType,
+    TimeTrackingActivityDTO,
+)
+from .notes import (
+    MongoActivityDataSource,
+    NoteRepository,
+    TimeTrackingActivityRepository,
 )
 from .queries import TimeQueryHandler
 
@@ -23,6 +30,8 @@ __all__ = [
     "InteractionDTO",
     "EventDTO",
     "ActivityDTO",
+    "NoteDTO",
+    "TimeTrackingActivityDTO",
     "TimeQueryResultDTO",
     "EventType",
     "ActivityStatus",
@@ -30,6 +39,9 @@ __all__ = [
     "TimeQueryHandler",
     "EventRepository",
     "ActivityRepository",
+    "NoteRepository",
+    "TimeTrackingActivityRepository",
+    "MongoActivityDataSource",
     "EventExtractor",
     "EventPairer",
 ]

@@ -39,7 +39,11 @@ from ..commands.timer import Timer, TimerManager, TimerStatus, parse_duration
 from ..config.loader import get_reminders_path
 from ..config.personality import get_default_personality
 from ..config.user_profile import load_user_profile
+from ..digest.daily import DailyDigestGenerator
+from ..digest.insights import InsightGenerator
+from ..digest.weekly import WeeklyDigestGenerator
 from ..feedback import FeedbackType
+from ..notes.categorizer import categorize
 from ..search import create_search_client
 from .intent import Intent, IntentClassifier, IntentType
 from .query_router import (
@@ -212,6 +216,12 @@ class Orchestrator:
 
         # Interaction storage (for logging all interactions to MongoDB)
         self._interaction_storage: object | None = None
+
+        # Note and activity repositories (set via set_note_storage)
+        self._note_repository: object | None = None
+        self._activity_repository: object | None = None
+        self._activity_data_source: object | None = None
+        self._entity_extractor: object | None = None
 
         # Background check thread for timers/reminders
         self._check_thread: threading.Thread | None = None
@@ -1608,14 +1618,46 @@ class Orchestrator:
         Returns:
             Response confirming note was captured.
         """
+        from ..storage.models import NoteDTO
+
         content = intent.entities.get("content", intent.raw_text)
 
         if not content:
             return "What would you like me to note?"
 
-        # TODO: Integrate with NoteService when storage is available
-        # For now, return confirmation
         logger.info(f"Note captured: {content[:50]}...")
+
+        # Extract entities and categorize if storage is available
+        if self._note_repository:
+            # Auto-categorize the note
+            category = categorize(content)
+
+            # Extract entities (people, topics, locations) if extractor available
+            people: list[str] = []
+            topics: list[str] = []
+            locations: list[str] = []
+
+            if self._entity_extractor:
+                try:
+                    entities = self._entity_extractor.extract(content)  # type: ignore
+                    people = entities.people
+                    topics = entities.topics
+                    locations = entities.locations
+                except Exception as e:
+                    logger.warning(f"Entity extraction failed: {e}")
+
+            # Save to MongoDB
+            note = NoteDTO(
+                transcript=content,
+                category=category.value,
+                timestamp=datetime.now(UTC),
+                user_id="default",
+                people=people,
+                topics=topics,
+                locations=locations,
+            )
+            note_id = self._note_repository.save(note)  # type: ignore
+            logger.info(f"Note saved with id={note_id}, category={category.value}")
 
         # Provide concise confirmation
         if self._user_name:
@@ -1636,10 +1678,30 @@ class Orchestrator:
         if not search_term:
             return "Who or what would you like me to search for in your notes?"
 
-        # TODO: Integrate with NoteService when storage is available
         logger.info(f"Note query: searching for '{search_term}'")
 
-        return f"I don't have any notes mentioning {search_term} yet."
+        if not self._note_repository:
+            return f"I don't have any notes mentioning {search_term} yet."
+
+        # Search by person first, then by topic, then full-text
+        notes = self._note_repository.find_by_person(search_term)  # type: ignore
+        if not notes:
+            notes = self._note_repository.find_by_topic(search_term)  # type: ignore
+        if not notes:
+            notes = self._note_repository.search_text(search_term)  # type: ignore
+
+        if not notes:
+            return f"I don't have any notes mentioning {search_term} yet."
+
+        # Format response with found notes
+        if len(notes) == 1:
+            note = notes[0]
+            return f"I found one note: {note.transcript[:100]}..."
+
+        # Multiple notes - summarize
+        response = f"I found {len(notes)} notes mentioning {search_term}. "
+        response += f"Most recent: {notes[0].transcript[:80]}..."
+        return response
 
     def _handle_activity_start(self, intent: Intent) -> str:
         """Handle activity start intent ('starting my workout').
@@ -1650,18 +1712,52 @@ class Orchestrator:
         Returns:
             Response confirming activity started.
         """
+        from ..storage.models import TimeTrackingActivityDTO
+
         activity = intent.entities.get("activity", "")
 
         if not activity:
             return "What activity are you starting?"
 
-        # TODO: Integrate with ActivityTracker when storage is available
         logger.info(f"Activity started: {activity}")
+
+        response_parts = []
+
+        if self._activity_repository:
+            # Check for and close any active activity
+            active = self._activity_repository.get_active()  # type: ignore
+            if active:
+                # Close the previous activity
+                active.end_time = datetime.now(UTC)
+                active.status = "completed"
+                if active.start_time:
+                    delta = active.end_time - active.start_time
+                    active.duration_minutes = int(delta.total_seconds() / 60)
+                self._activity_repository.update(active)  # type: ignore
+                response_parts.append(
+                    f"Stopped {active.name} ({active.duration_minutes or 0} minutes)."
+                )
+
+            # Categorize and start new activity
+            category = categorize(activity)
+
+            new_activity = TimeTrackingActivityDTO(
+                name=activity,
+                category=category.value,
+                start_time=datetime.now(UTC),
+                status="active",
+                user_id="default",
+            )
+            activity_id = self._activity_repository.save(new_activity)  # type: ignore
+            logger.info(f"Activity saved with id={activity_id}, category={category.value}")
 
         # Concise confirmation
         if self._user_name:
-            return f"Started tracking {activity}, {self._user_name}!"
-        return f"Started tracking {activity}!"
+            response_parts.append(f"Started tracking {activity}, {self._user_name}!")
+        else:
+            response_parts.append(f"Started tracking {activity}!")
+
+        return " ".join(response_parts)
 
     def _handle_activity_stop(self, intent: Intent) -> str:
         """Handle activity stop intent ('done with workout').
@@ -1672,46 +1768,103 @@ class Orchestrator:
         Returns:
             Response confirming activity stopped with duration.
         """
-        activity = intent.entities.get("activity", "")
+        activity_name = intent.entities.get("activity", "")
 
-        # TODO: Integrate with ActivityTracker when storage is available
-        logger.info(f"Activity stopped: {activity if activity else 'current'}")
+        logger.info(f"Activity stopped: {activity_name if activity_name else 'current'}")
 
-        if activity:
-            return f"Stopped tracking {activity}."
-        return "Stopped tracking your activity."
+        if not self._activity_repository:
+            if activity_name:
+                return f"Stopped tracking {activity_name}."
+            return "Stopped tracking your activity."
 
-    def _handle_digest_daily(self, intent: Intent) -> str:
+        # Get active activity
+        active = self._activity_repository.get_active()  # type: ignore
+
+        if not active:
+            return "You don't have any active activity to stop."
+
+        # If activity name provided, verify it matches (fuzzy)
+        if activity_name and activity_name.lower() not in active.name.lower():
+            return f"Your current activity is '{active.name}', not '{activity_name}'. Say 'done with {active.name}' to stop it."
+
+        # Complete the activity
+        active.end_time = datetime.now(UTC)
+        active.status = "completed"
+        if active.start_time:
+            delta = active.end_time - active.start_time
+            active.duration_minutes = int(delta.total_seconds() / 60)
+
+        self._activity_repository.update(active)  # type: ignore
+
+        # Format duration for response
+        duration = active.duration_minutes or 0
+        if duration >= 60:
+            hours = duration // 60
+            mins = duration % 60
+            duration_str = f"{hours} hour{'s' if hours > 1 else ''}"
+            if mins > 0:
+                duration_str += f" and {mins} minute{'s' if mins > 1 else ''}"
+        else:
+            duration_str = f"{duration} minute{'s' if duration != 1 else ''}"
+
+        return f"Stopped tracking {active.name}. Duration: {duration_str}."
+
+    def _handle_digest_daily(self, _intent: Intent) -> str:
         """Handle daily digest intent ('how did I spend my time today?').
 
         Args:
-            intent: Classified intent with optional time_range entity.
+            _intent: Classified intent (unused, kept for interface consistency).
 
         Returns:
             Response with daily time breakdown.
         """
-        time_range = intent.entities.get("time_range")
+        logger.info("Daily digest requested")
 
-        # TODO: Integrate with DigestGenerator when storage is available
-        logger.info(f"Daily digest requested (time_range={time_range})")
+        if not self._activity_data_source:
+            return "I don't have any activities tracked for today yet."
 
-        return "I don't have any activities tracked for today yet."
+        # Generate daily digest using the data source
+        generator = DailyDigestGenerator(
+            data_source=self._activity_data_source,  # type: ignore
+            user_id="default",
+        )
+        digest = generator.generate()
 
-    def _handle_digest_weekly(self, intent: Intent) -> str:
+        return digest.summary
+
+    def _handle_digest_weekly(self, _intent: Intent) -> str:
         """Handle weekly digest intent ('how did I spend my time this week?').
 
         Args:
-            intent: Classified intent with optional category entity.
+            _intent: Classified intent (unused, kept for interface consistency).
 
         Returns:
             Response with weekly time breakdown and insights.
         """
-        category = intent.entities.get("category")
+        logger.info("Weekly digest requested")
 
-        # TODO: Integrate with DigestGenerator when storage is available
-        logger.info(f"Weekly digest requested (category={category})")
+        if not self._activity_data_source:
+            return "I don't have enough activity data for a weekly summary yet."
 
-        return "I don't have enough activity data for a weekly summary yet."
+        # Generate weekly digest
+        generator = WeeklyDigestGenerator(
+            data_source=self._activity_data_source,  # type: ignore
+            user_id="default",
+        )
+        digest = generator.generate()
+
+        # Add insights if we have enough data
+        insight_gen = InsightGenerator(
+            data_source=self._activity_data_source,  # type: ignore
+            user_id="default",
+        )
+        insights = insight_gen.analyze(weeks=2)
+
+        if insights:
+            # Append first insight to summary
+            return f"{digest.summary} {insights[0].description}"
+
+        return digest.summary
 
     def set_time_query_storage(self, storage: object) -> None:
         """Set storage for time queries (call when MongoDB is available).
@@ -1728,6 +1881,33 @@ class Orchestrator:
             storage: Storage object with interactions repository.
         """
         self._interaction_storage = storage
+
+    def set_note_storage(
+        self,
+        note_repository: object,
+        activity_repository: object,
+        llm: object | None = None,
+    ) -> None:
+        """Set storage for notes and time tracking (call when MongoDB is available).
+
+        Args:
+            note_repository: NoteRepository instance for note storage.
+            activity_repository: TimeTrackingActivityRepository instance.
+            llm: Optional LLM for entity extraction. Uses self._llm if not provided.
+        """
+        from ..notes.extractor import EntityExtractor
+        from ..storage.notes import MongoActivityDataSource
+
+        self._note_repository = note_repository
+        self._activity_repository = activity_repository
+        self._activity_data_source = MongoActivityDataSource(activity_repository)  # type: ignore
+
+        # Set up entity extractor with LLM
+        extractor_llm = llm or self._llm
+        if extractor_llm:
+            self._entity_extractor = EntityExtractor(llm=extractor_llm)
+
+        logger.info("Note and activity storage configured")
 
     def _on_timer_expire(self, timer: "Timer") -> None:
         """Callback when a timer expires."""
