@@ -216,6 +216,111 @@ class TimeQueryResultDTO:
     activities_found: list[ActivityDTO] = field(default_factory=list)
 
 
+@dataclass
+class NoteDTO:
+    """Data transfer object for captured notes (005-time-tracking-notes).
+
+    Stores voice notes with extracted entities (people, topics, locations).
+    """
+
+    transcript: str
+    category: str
+    timestamp: datetime
+    user_id: str
+    id: str | None = None
+    people: list[str] = field(default_factory=list)
+    topics: list[str] = field(default_factory=list)
+    locations: list[str] = field(default_factory=list)
+    activity_id: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for MongoDB storage."""
+        return {
+            "transcript": self.transcript,
+            "category": self.category,
+            "timestamp": self.timestamp,
+            "user_id": self.user_id,
+            "people": self.people,
+            "topics": self.topics,
+            "locations": self.locations,
+            "activity_id": self.activity_id,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "NoteDTO":
+        """Create from MongoDB document."""
+        timestamp = data.get("timestamp", datetime.now(UTC))
+        if timestamp and timestamp.tzinfo is None:
+            timestamp = timestamp.replace(tzinfo=UTC)
+
+        return cls(
+            id=str(data.get("_id", "")) if data.get("_id") else None,
+            transcript=data.get("transcript", ""),
+            category=data.get("category", "uncategorized"),
+            timestamp=timestamp,
+            user_id=data.get("user_id", "default"),
+            people=data.get("people", []),
+            topics=data.get("topics", []),
+            locations=data.get("locations", []),
+            activity_id=data.get("activity_id"),
+        )
+
+
+@dataclass
+class TimeTrackingActivityDTO:
+    """Data transfer object for time-tracked activities (005-time-tracking-notes).
+
+    Tracks activity durations via "starting X" / "done with X" commands.
+    Different from ActivityDTO which pairs start/end events from EVENT_LOG.
+    """
+
+    name: str
+    category: str
+    start_time: datetime
+    status: str  # "active" | "completed"
+    user_id: str
+    id: str | None = None
+    end_time: datetime | None = None
+    duration_minutes: int | None = None
+    auto_closed: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for MongoDB storage."""
+        return {
+            "name": self.name,
+            "category": self.category,
+            "start_time": self.start_time,
+            "end_time": self.end_time,
+            "duration_minutes": self.duration_minutes,
+            "status": self.status,
+            "auto_closed": self.auto_closed,
+            "user_id": self.user_id,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "TimeTrackingActivityDTO":
+        """Create from MongoDB document."""
+        start_time = data.get("start_time", datetime.now(UTC))
+        end_time = data.get("end_time")
+
+        if start_time and start_time.tzinfo is None:
+            start_time = start_time.replace(tzinfo=UTC)
+        if end_time and end_time.tzinfo is None:
+            end_time = end_time.replace(tzinfo=UTC)
+
+        return cls(
+            id=str(data.get("_id", "")) if data.get("_id") else None,
+            name=data.get("name", ""),
+            category=data.get("category", "uncategorized"),
+            start_time=start_time,
+            end_time=end_time,
+            duration_minutes=data.get("duration_minutes"),
+            status=data.get("status", "active"),
+            auto_closed=data.get("auto_closed", False),
+            user_id=data.get("user_id", "default"),
+        )
+
+
 __all__ = [
     "EventType",
     "ActivityStatus",
@@ -224,4 +329,6 @@ __all__ = [
     "EventDTO",
     "ActivityDTO",
     "TimeQueryResultDTO",
+    "NoteDTO",
+    "TimeTrackingActivityDTO",
 ]

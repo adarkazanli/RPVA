@@ -562,6 +562,19 @@ class Orchestrator:
             return self._handle_activity_search(intent)
         elif intent.type == IntentType.EVENT_LOG:
             return self._handle_event_log(intent, interaction_id)
+        # Note-taking & time tracking intents (005-time-tracking-notes)
+        elif intent.type == IntentType.NOTE_CAPTURE:
+            return self._handle_note_capture(intent)
+        elif intent.type == IntentType.NOTE_QUERY:
+            return self._handle_note_query(intent)
+        elif intent.type == IntentType.ACTIVITY_START:
+            return self._handle_activity_start(intent)
+        elif intent.type == IntentType.ACTIVITY_STOP:
+            return self._handle_activity_stop(intent)
+        elif intent.type == IntentType.DIGEST_DAILY:
+            return self._handle_digest_daily(intent)
+        elif intent.type == IntentType.DIGEST_WEEKLY:
+            return self._handle_digest_weekly(intent)
         else:
             # Default to LLM for general questions
             if self._llm is None:
@@ -1416,6 +1429,122 @@ class Orchestrator:
             event_type=event_type,
             interaction_id=str(interaction_id),
         )
+
+    # --- Note-taking & time tracking handlers (005-time-tracking-notes) ---
+
+    def _handle_note_capture(self, intent: Intent) -> str:
+        """Handle note capture intent ('note that...', 'remember...').
+
+        Args:
+            intent: Classified intent with content entity.
+
+        Returns:
+            Response confirming note was captured.
+        """
+        content = intent.entities.get("content", intent.raw_text)
+
+        if not content:
+            return "What would you like me to note?"
+
+        # TODO: Integrate with NoteService when storage is available
+        # For now, return confirmation
+        logger.info(f"Note captured: {content[:50]}...")
+
+        # Provide concise confirmation
+        if self._user_name:
+            return f"Got it, {self._user_name}! Noted."
+        return "Got it! Noted."
+
+    def _handle_note_query(self, intent: Intent) -> str:
+        """Handle note query intent ('what did I discuss with...').
+
+        Args:
+            intent: Classified intent with search_term entity.
+
+        Returns:
+            Response with matching notes or 'no results' message.
+        """
+        search_term = intent.entities.get("search_term", "")
+
+        if not search_term:
+            return "Who or what would you like me to search for in your notes?"
+
+        # TODO: Integrate with NoteService when storage is available
+        logger.info(f"Note query: searching for '{search_term}'")
+
+        return f"I don't have any notes mentioning {search_term} yet."
+
+    def _handle_activity_start(self, intent: Intent) -> str:
+        """Handle activity start intent ('starting my workout').
+
+        Args:
+            intent: Classified intent with activity entity.
+
+        Returns:
+            Response confirming activity started.
+        """
+        activity = intent.entities.get("activity", "")
+
+        if not activity:
+            return "What activity are you starting?"
+
+        # TODO: Integrate with ActivityTracker when storage is available
+        logger.info(f"Activity started: {activity}")
+
+        # Concise confirmation
+        if self._user_name:
+            return f"Started tracking {activity}, {self._user_name}!"
+        return f"Started tracking {activity}!"
+
+    def _handle_activity_stop(self, intent: Intent) -> str:
+        """Handle activity stop intent ('done with workout').
+
+        Args:
+            intent: Classified intent with activity entity.
+
+        Returns:
+            Response confirming activity stopped with duration.
+        """
+        activity = intent.entities.get("activity", "")
+
+        # TODO: Integrate with ActivityTracker when storage is available
+        logger.info(f"Activity stopped: {activity if activity else 'current'}")
+
+        if activity:
+            return f"Stopped tracking {activity}."
+        return "Stopped tracking your activity."
+
+    def _handle_digest_daily(self, intent: Intent) -> str:
+        """Handle daily digest intent ('how did I spend my time today?').
+
+        Args:
+            intent: Classified intent with optional time_range entity.
+
+        Returns:
+            Response with daily time breakdown.
+        """
+        time_range = intent.entities.get("time_range")
+
+        # TODO: Integrate with DigestGenerator when storage is available
+        logger.info(f"Daily digest requested (time_range={time_range})")
+
+        return "I don't have any activities tracked for today yet."
+
+    def _handle_digest_weekly(self, intent: Intent) -> str:
+        """Handle weekly digest intent ('how did I spend my time this week?').
+
+        Args:
+            intent: Classified intent with optional category entity.
+
+        Returns:
+            Response with weekly time breakdown and insights.
+        """
+        category = intent.entities.get("category")
+
+        # TODO: Integrate with DigestGenerator when storage is available
+        logger.info(f"Weekly digest requested (category={category})")
+
+        return "I don't have enough activity data for a weekly summary yet."
 
     def set_time_query_storage(self, storage: object) -> None:
         """Set storage for time queries (call when MongoDB is available).
