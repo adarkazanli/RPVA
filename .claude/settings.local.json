@@ -17,7 +17,9 @@
       "Bash(python -m mypy:*)",
       "Bash(pip show:*)",
       "Bash(git stash:*)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "WebSearch",
+      "Bash(cat:*)"
     ]
   }
 }

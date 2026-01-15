@@ -226,10 +226,15 @@ class Orchestrator:
         # Background check thread for timers/reminders
         self._check_thread: threading.Thread | None = None
 
-        # Configuration
-        self._silence_timeout_ms = 5000  # Stop recording after 5s silence
-        self._max_recording_ms = 180000  # Max 3 minute recording
-        self._stop_keyword = "done porcupine"  # Keyword to end recording
+        # Recording configuration - default (questions/commands)
+        self._silence_timeout_ms = 2000  # Stop recording after 2s silence
+        self._max_recording_ms = 10000  # Max 10s recording
+
+        # Recording configuration - note-taking mode
+        self._note_silence_timeout_ms = 5000  # 5s silence for notes
+        self._note_max_recording_ms = 180000  # 3 minute max for notes
+        self._note_trigger_phrases = ["take note", "take a note", "note that", "remember that"]
+        self._stop_keyword = "done porcupine"  # Keyword to end note recording
 
         # Load personality configuration
         self._personality = get_default_personality()
@@ -360,37 +365,48 @@ class Orchestrator:
             self._feedback.play(FeedbackType.WAKE_WORD_DETECTED)
             logger.info("Wake word detected, listening for speech...")
 
-            # Step 2: Record user speech
+            # Step 2: Record user speech with mode detection
             stt_start = time.time()
-            audio_data = self._record_speech()
+            audio_data, is_note_mode = self._record_with_mode_detection()
 
             if not audio_data:
                 logger.warning("No speech detected")
                 return None
 
-            # Step 3: Transcribe speech
+            # Step 3: Transcribe speech (full audio for note mode)
             transcript_result = self._transcriber.transcribe(audio_data, 16000)
             transcript = transcript_result.text.strip()
 
-            # Strip stop keyword if present (case-insensitive)
-            if transcript.lower().endswith(self._stop_keyword):
+            # Strip stop keyword if present (case-insensitive) - only for note mode
+            if is_note_mode and transcript.lower().endswith(self._stop_keyword):
                 transcript = transcript[: -len(self._stop_keyword)].strip()
                 # Also handle punctuation before the keyword
                 transcript = transcript.rstrip(".,;:!?")
-                logger.info(f"Stop keyword detected, stripped from transcript")
+                logger.info("Stop keyword detected, stripped from transcript")
 
             if not transcript:
                 logger.warning("Empty transcription")
                 return None
 
             latencies["stt_ms"] = int((time.time() - stt_start) * 1000)
-            logger.info(f"Transcribed: '{transcript}'")
+            logger.info(f"Transcribed: '{transcript}' (note_mode={is_note_mode})")
 
             # Log capture timing
             _log_interaction_timing("captured", transcript)
 
-            # Step 4: Classify intent
-            intent = self._intent_classifier.classify(transcript)
+            # Step 4: Classify intent (or force NOTE_CAPTURE for note mode)
+            if is_note_mode:
+                # Force note capture intent for note-taking mode
+                from .intent import Intent, IntentType
+
+                intent = Intent(
+                    type=IntentType.NOTE_CAPTURE,
+                    confidence=1.0,
+                    entities={"content": transcript},
+                )
+                logger.info("Note mode: forcing NOTE_CAPTURE intent")
+            else:
+                intent = self._intent_classifier.classify(transcript)
             logger.info(f"Intent: {intent.type.value} (confidence: {intent.confidence:.2f})")
 
             # Step 5: Handle intent (command or LLM)
@@ -402,9 +418,14 @@ class Orchestrator:
             # Log response timing
             _log_interaction_timing("responded", response_text)
 
-            # Step 6: Synthesize speech
+            # Step 6: Synthesize speech (brief confirmation for note mode)
             tts_start = time.time()
-            synthesis_result = self._synthesizer.synthesize(response_text)
+            if is_note_mode:
+                # Brief confirmation for notes - no need to repeat content
+                brief_response = "Noted."
+                synthesis_result = self._synthesizer.synthesize(brief_response)
+            else:
+                synthesis_result = self._synthesizer.synthesize(response_text)
             latencies["tts_ms"] = int((time.time() - tts_start) * 1000)
 
             # Step 7: Play response
@@ -412,8 +433,8 @@ class Orchestrator:
             self._playback.play(synthesis_result.audio, synthesis_result.sample_rate)
             latencies["play_ms"] = int((time.time() - play_start) * 1000)
 
-            # Step 8: Check for follow-up if response ended with a question
-            if response_text.strip().endswith("?"):
+            # Step 8: Check for follow-up if response ended with a question (skip for note mode)
+            if not is_note_mode and response_text.strip().endswith("?"):
                 logger.info("Response ended with question, listening for follow-up...")
                 follow_up_audio = self._record_follow_up(timeout_ms=5000)
 
@@ -2259,14 +2280,25 @@ class Orchestrator:
 
         return False
 
-    def _record_speech(self) -> bytes:
+    def _record_speech(
+        self,
+        silence_timeout_ms: int | None = None,
+        max_recording_ms: int | None = None,
+    ) -> bytes:
         """Record user speech until silence detected.
+
+        Args:
+            silence_timeout_ms: Override silence timeout (default: self._silence_timeout_ms)
+            max_recording_ms: Override max recording time (default: self._max_recording_ms)
 
         Returns:
             Recorded audio bytes
         """
         if not self._capture:
             return b""
+
+        silence_timeout = silence_timeout_ms or self._silence_timeout_ms
+        max_recording = max_recording_ms or self._max_recording_ms
 
         audio_buffer = b""
         silence_start: float | None = None
@@ -2287,7 +2319,7 @@ class Orchestrator:
                 if is_silence:
                     if silence_start is None:
                         silence_start = time.time()
-                    elif (time.time() - silence_start) * 1000 > self._silence_timeout_ms:
+                    elif (time.time() - silence_start) * 1000 > silence_timeout:
                         # Silence timeout reached
                         logger.debug("Silence detected, stopping recording")
                         break
@@ -2295,7 +2327,7 @@ class Orchestrator:
                     silence_start = None
 
                 # Check max recording time
-                if (time.time() - recording_start) * 1000 > self._max_recording_ms:
+                if (time.time() - recording_start) * 1000 > max_recording:
                     logger.debug("Max recording time reached")
                     break
 
@@ -2303,6 +2335,63 @@ class Orchestrator:
             self._capture.stop()
 
         return audio_buffer
+
+    def _is_note_trigger(self, text: str) -> bool:
+        """Check if text starts with a note-taking trigger phrase.
+
+        Args:
+            text: Transcribed text to check
+
+        Returns:
+            True if text indicates note-taking mode
+        """
+        text_lower = text.lower().strip()
+        return any(text_lower.startswith(phrase) for phrase in self._note_trigger_phrases)
+
+    def _record_with_mode_detection(self) -> tuple[bytes, bool]:
+        """Record speech with automatic note-taking mode detection.
+
+        Does a quick initial recording to detect if user wants to take a note.
+        If note-taking detected, continues with extended recording settings.
+
+        Returns:
+            Tuple of (audio_bytes, is_note_mode)
+        """
+        if not self._capture or not self._transcriber:
+            return b"", False
+
+        # Phase 1: Quick recording to detect mode (3 seconds max, 1.5s silence)
+        initial_audio = self._record_speech(
+            silence_timeout_ms=1500,
+            max_recording_ms=3000,
+        )
+
+        if not initial_audio:
+            return b"", False
+
+        # Quick transcription to detect note-taking
+        initial_result = self._transcriber.transcribe(initial_audio, 16000)
+        initial_text = initial_result.text.strip()
+
+        if not initial_text:
+            return initial_audio, False
+
+        # Check if note-taking mode
+        if self._is_note_trigger(initial_text):
+            logger.info("Note-taking mode detected, extending recording...")
+
+            # Phase 2: Continue with extended recording
+            extended_audio = self._record_speech(
+                silence_timeout_ms=self._note_silence_timeout_ms,
+                max_recording_ms=self._note_max_recording_ms,
+            )
+
+            # Combine audio
+            combined_audio = initial_audio + extended_audio
+            return combined_audio, True
+
+        # Not note-taking mode, return initial recording
+        return initial_audio, False
 
     def _record_follow_up(self, timeout_ms: int = 5000) -> bytes:
         """Record follow-up speech for a limited time.
