@@ -5,7 +5,7 @@ Provides SQLite and JSONL storage backends for interaction data.
 
 import json
 import sqlite3
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from uuid import UUID
 
@@ -180,8 +180,8 @@ class SQLiteStorage:
         """Get interactions within a date range.
 
         Args:
-            start: Start datetime.
-            end: End datetime.
+            start: Start datetime (inclusive).
+            end: End datetime (exclusive).
 
         Returns:
             List of interactions.
@@ -189,7 +189,7 @@ class SQLiteStorage:
         cursor = self._conn.execute(
             """
             SELECT * FROM interactions
-            WHERE timestamp >= ? AND timestamp <= ?
+            WHERE timestamp >= ? AND timestamp < ?
             ORDER BY timestamp DESC
             """,
             (start.isoformat(), end.isoformat()),
@@ -246,12 +246,14 @@ class SQLiteStorage:
             Number of interactions.
         """
         start = datetime.combine(target_date, datetime.min.time()).replace(tzinfo=UTC)
-        end = datetime.combine(target_date, datetime.max.time()).replace(tzinfo=UTC)
+        end = datetime.combine(target_date + timedelta(days=1), datetime.min.time()).replace(
+            tzinfo=UTC
+        )
 
         cursor = self._conn.execute(
             """
             SELECT COUNT(*) FROM interactions
-            WHERE timestamp >= ? AND timestamp <= ?
+            WHERE timestamp >= ? AND timestamp < ?
             """,
             (start.isoformat(), end.isoformat()),
         )
@@ -267,12 +269,14 @@ class SQLiteStorage:
             Dictionary of intent to count.
         """
         start = datetime.combine(target_date, datetime.min.time()).replace(tzinfo=UTC)
-        end = datetime.combine(target_date, datetime.max.time()).replace(tzinfo=UTC)
+        end = datetime.combine(target_date + timedelta(days=1), datetime.min.time()).replace(
+            tzinfo=UTC
+        )
 
         cursor = self._conn.execute(
             """
             SELECT intent, COUNT(*) as count FROM interactions
-            WHERE timestamp >= ? AND timestamp <= ?
+            WHERE timestamp >= ? AND timestamp < ?
             GROUP BY intent
             ORDER BY count DESC
             """,
@@ -291,12 +295,14 @@ class SQLiteStorage:
             Average latency in ms.
         """
         start = datetime.combine(target_date, datetime.min.time()).replace(tzinfo=UTC)
-        end = datetime.combine(target_date, datetime.max.time()).replace(tzinfo=UTC)
+        end = datetime.combine(target_date + timedelta(days=1), datetime.min.time()).replace(
+            tzinfo=UTC
+        )
 
         cursor = self._conn.execute(
             """
             SELECT latency_ms FROM interactions
-            WHERE timestamp >= ? AND timestamp <= ?
+            WHERE timestamp >= ? AND timestamp < ?
             """,
             (start.isoformat(), end.isoformat()),
         )

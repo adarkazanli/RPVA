@@ -217,7 +217,7 @@ class TestSummaryGenerator:
 
     def test_generate_summary(self, generator: SummaryGenerator) -> None:
         """Test generating a daily summary."""
-        today = date.today()
+        today = datetime.now(UTC).date()  # Use UTC date to match stored timestamps
         summary = generator.generate(today, device_id="test-device")
 
         assert summary is not None
@@ -227,14 +227,14 @@ class TestSummaryGenerator:
 
     def test_generate_summary_no_interactions(self, generator: SummaryGenerator) -> None:
         """Test generating summary for date with no interactions."""
-        past_date = date(2020, 1, 1)
+        past_date = datetime(2020, 1, 1, tzinfo=UTC).date()
         summary = generator.generate(past_date, device_id="test-device")
 
         assert summary.total_interactions == 0
 
     def test_calculate_p95_latency(self, generator: SummaryGenerator) -> None:
         """Test P95 latency calculation."""
-        today = date.today()
+        today = datetime.now(UTC).date()  # Use UTC date to match stored timestamps
         summary = generator.generate(today, device_id="test-device")
 
         # With 10 interactions at 1000-1900ms, P95 should be high
@@ -242,7 +242,7 @@ class TestSummaryGenerator:
 
     def test_top_intents(self, generator: SummaryGenerator) -> None:
         """Test top intents calculation."""
-        today = date.today()
+        today = datetime.now(UTC).date()  # Use UTC date to match stored timestamps
         summary = generator.generate(today, device_id="test-device")
 
         assert len(summary.top_intents) > 0
@@ -252,7 +252,7 @@ class TestSummaryGenerator:
 
     def test_mode_breakdown(self, generator: SummaryGenerator) -> None:
         """Test mode breakdown calculation."""
-        today = date.today()
+        today = datetime.now(UTC).date()  # Use UTC date to match stored timestamps
         summary = generator.generate(today, device_id="test-device")
 
         assert "offline" in summary.mode_breakdown
@@ -260,7 +260,7 @@ class TestSummaryGenerator:
 
     def test_save_summary(self, generator: SummaryGenerator, tmp_path) -> None:
         """Test saving summary to file."""
-        today = date.today()
+        today = datetime.now(UTC).date()  # Use UTC date to match stored timestamps
         summary = generator.generate(today, device_id="test-device")
 
         output_path = tmp_path / "summary.md"

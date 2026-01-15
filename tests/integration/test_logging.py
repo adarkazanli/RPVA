@@ -1,6 +1,6 @@
 """Integration tests for conversation logging."""
 
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -173,7 +173,7 @@ class TestSummaryGeneration:
     def test_generate_daily_summary(self, storage_with_data: InteractionStorage) -> None:
         """Test generating a complete daily summary."""
         generator = SummaryGenerator(storage_with_data)
-        today = date.today()
+        today = datetime.now(UTC).date()  # Use UTC date to match stored timestamps
 
         summary = generator.generate(today, device_id="test-device")
 
@@ -185,7 +185,7 @@ class TestSummaryGeneration:
     def test_summary_includes_action_items(self, storage_with_data: InteractionStorage) -> None:
         """Test that summary includes action items from reminders."""
         generator = SummaryGenerator(storage_with_data)
-        today = date.today()
+        today = datetime.now(UTC).date()  # Use UTC date to match stored timestamps
 
         summary = generator.generate(today, device_id="test-device")
 
@@ -197,7 +197,7 @@ class TestSummaryGeneration:
     ) -> None:
         """Test exporting summary to Markdown file."""
         generator = SummaryGenerator(storage_with_data)
-        today = date.today()
+        today = datetime.now(UTC).date()  # Use UTC date to match stored timestamps
 
         summary = generator.generate(today, device_id="test-device")
         output_path = tmp_path / "daily_summary.md"
@@ -248,17 +248,17 @@ class TestHistoryQuery:
 
     def test_query_by_date(self, storage_with_history: InteractionStorage) -> None:
         """Test querying interactions by date."""
-        today = date.today()
+        today = datetime.now(UTC).date()  # Use UTC date to match stored timestamps
         interactions = storage_with_history.sqlite.get_by_date_range(
             datetime.combine(today, datetime.min.time()).replace(tzinfo=UTC),
-            datetime.combine(today, datetime.max.time()).replace(tzinfo=UTC),
+            datetime.combine(today + timedelta(days=1), datetime.min.time()).replace(tzinfo=UTC),
         )
 
         assert len(interactions) == 5
 
     def test_query_by_intent(self, storage_with_history: InteractionStorage) -> None:
         """Test getting intent statistics."""
-        today = date.today()
+        today = datetime.now(UTC).date()  # Use UTC date to match stored timestamps
         counts = storage_with_history.sqlite.get_intent_counts(today)
 
         assert counts.get("general_question", 0) == 5

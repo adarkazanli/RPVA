@@ -6,7 +6,7 @@ Generates aggregated statistics and action items from daily interactions.
 import re
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -213,7 +213,9 @@ class SummaryGenerator:
         """
         # Get interactions for the date
         start = datetime.combine(target_date, datetime.min.time()).replace(tzinfo=UTC)
-        end = datetime.combine(target_date, datetime.max.time()).replace(tzinfo=UTC)
+        end = datetime.combine(target_date + timedelta(days=1), datetime.min.time()).replace(
+            tzinfo=UTC
+        )
 
         interactions = self._storage.sqlite.get_by_date_range(start, end)
 
