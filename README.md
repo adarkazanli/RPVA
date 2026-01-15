@@ -44,6 +44,32 @@ PYTHONPATH=src python -m ara --profile dev
 - **Voice Notes**: Capture notes with automatic entity extraction (people, topics, locations)
 - **Time Tracking**: Track activity duration with start/stop commands
 - **Daily/Weekly Digests**: Get summaries of how you spend your time
+- **Email Action Items**: Send your to-do list to your email via voice command
+
+## Voice Command Cheatsheet
+
+| Category | Say This | What It Does |
+|----------|----------|--------------|
+| **Basics** | "What time is it?" | Get current time |
+| | "What's today's date?" | Get current date |
+| | "What is the capital of France?" | General knowledge |
+| **Web Search** | "**With internet**, what's the weather?" | Search the web |
+| | "**Search online** for best restaurants" | Web search |
+| | "**Check the news** about stocks" | News search |
+| **Notes** | "**Remember that** I met John about X" | Capture note |
+| | "**Note that** I need to call Sarah" | Capture note |
+| | "**What did I say about** the meeting?" | Query notes |
+| **Action Items** | "**List my action items** for today" | Show today's tasks |
+| | "**What do I need to do** today?" | Show today's tasks |
+| | "**Email me my action items**" | Send tasks to email |
+| **Time Tracking** | "**Starting** work on the report" | Start timer |
+| | "**Done with** the report" | Stop timer |
+| | "**How did I spend my time** today?" | Daily summary |
+| | "**Give me a weekly summary**" | Weekly insights |
+| **Reminders** | "**Remind me** in 10 minutes to call John" | Set reminder |
+| | "**Set a timer** for 5 minutes" | Set timer |
+
+> **Tip:** Say the wake word first (default: "porcupine"), wait a moment, then speak your command clearly.
 
 ## Web Search Setup (Tavily)
 
@@ -90,6 +116,44 @@ Trigger web search with these **keywords**:
 - **Smart Routing**: Only queries with trigger phrases use web search; others stay fully offline
 
 > **Note:** Web search is optional. Without a Tavily API key, Ara works fully offline for all other features.
+
+## Email Setup (Action Items)
+
+Ara can email your action items to you. This requires SMTP credentials.
+
+### Configuration
+
+Add these variables to your `.env` file:
+
+```bash
+EMAIL_ADDRESS=your-email@example.com    # Recipient email address
+SMTP_HOST=smtp.gmail.com                # SMTP server
+SMTP_PORT=587                           # SMTP port (usually 587 for TLS)
+SMTP_USER=your-email@gmail.com          # SMTP username
+SMTP_PASS=your-app-password             # App password (not regular password)
+```
+
+### Gmail App Password
+
+If using Gmail, you need an app password (regular password won't work with 2FA):
+
+1. Go to [myaccount.google.com](https://myaccount.google.com) → Security
+2. Enable 2-Step Verification (if not already)
+3. Under 2-Step Verification, click **App passwords**
+4. Select "Mail" and "Other (custom name)" → enter "Ara"
+5. Copy the 16-character password to `SMTP_PASS`
+
+### Usage
+
+```
+You: "Ara, email me my action items"
+Ara: "Done! I've sent your action items to your email."
+
+You: "Ara, email me yesterday's action items"
+Ara: "Done! I've sent yesterday's action items to your email."
+```
+
+> **Note:** Email is optional. Without SMTP configuration, Ara works fully offline for all other features.
 
 ## Architecture
 
@@ -649,7 +713,8 @@ RPVA/
 │   ├── wake_word/                     # Wake word detection
 │   ├── notes/                         # Voice notes & entity extraction
 │   ├── activities/                    # Activity duration tracking
-│   └── digest/                        # Daily/weekly time summaries
+│   ├── digest/                        # Daily/weekly time summaries
+│   └── email/                         # Email action items via SMTP
 ├── tests/                             # Test suite
 │   ├── unit/                          # Unit tests
 │   ├── integration/                   # Integration tests

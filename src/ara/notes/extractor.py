@@ -30,28 +30,18 @@ class LanguageModel(Protocol):
 
 
 # Prompt template for entity extraction
-EXTRACTION_PROMPT = """Extract entities from this note. Return ONLY valid JSON with no additional text:
-{{
-  "people": ["name1", "name2"],
-  "topics": ["topic1", "topic2"],
-  "locations": ["location1"],
-  "action_items": ["action1", "action2"]
-}}
-
-Rules:
-- people: Names of specific people mentioned (e.g., "John", "Sarah", "Dr. Smith")
-- topics: Main subjects or themes discussed (e.g., "Q1 budget", "project deadline")
-- locations: Specific places mentioned (e.g., "Starbucks", "downtown office", "conference room")
-- action_items: Tasks or actions the speaker needs to do, phrased as brief imperatives
-  - Look for phrases like "I should...", "I need to...", "I will...", "I have to...", "need to..."
-  - Convert to brief action format (e.g., "I should review the process" -> "review the process")
-  - Only include clear actionable items, not observations or facts
-- Return empty arrays [] if no entities found for a category
-- Do NOT include generic references like "the team" unless it's a named team
+EXTRACTION_PROMPT = """Extract entities from this voice note. Return ONLY a JSON object.
 
 Note: "{transcript}"
 
-JSON:"""
+Extract:
+- people: Array of names mentioned (strings only)
+- topics: Array of subjects discussed (strings only)
+- locations: Array of places mentioned (strings only)
+- action_items: Array of tasks as COMPLETE SENTENCES (strings only, keep full context like "send email to John about the meeting", "pay electricity bill by Friday")
+
+Return ONLY valid JSON with string arrays:
+{{"people": [], "topics": [], "locations": [], "action_items": []}}"""
 
 
 class EntityExtractor:
@@ -112,16 +102,43 @@ class EntityExtractor:
                 data = json.loads(json_str)
 
                 return ExtractedEntities(
-                    people=data.get("people", []),
-                    topics=data.get("topics", []),
-                    locations=data.get("locations", []),
-                    action_items=data.get("action_items", []),
+                    people=self._normalize_strings(data.get("people", [])),
+                    topics=self._normalize_strings(data.get("topics", [])),
+                    locations=self._normalize_strings(data.get("locations", [])),
+                    action_items=self._normalize_strings(data.get("action_items", [])),
                 )
 
         except json.JSONDecodeError as e:
             logger.warning(f"Failed to parse extraction JSON: {e}")
 
         return ExtractedEntities()
+
+    @staticmethod
+    def _normalize_strings(items: list) -> list[str]:
+        """Normalize items to strings, handling objects from LLM.
+
+        Args:
+            items: List that may contain strings or dicts
+
+        Returns:
+            List of strings only
+        """
+        result = []
+        for item in items:
+            if isinstance(item, str):
+                result.append(item)
+            elif isinstance(item, dict):
+                # Try common keys that might contain the value
+                for key in ["description", "text", "task", "name", "value"]:
+                    if key in item and isinstance(item[key], str):
+                        result.append(item[key])
+                        break
+                else:
+                    # Fallback: join all string values
+                    parts = [v for v in item.values() if isinstance(v, str)]
+                    if parts:
+                        result.append(" ".join(parts))
+        return result
 
 
 __all__ = ["EntityExtractor", "ExtractedEntities", "EXTRACTION_PROMPT"]
