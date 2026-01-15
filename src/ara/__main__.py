@@ -263,6 +263,22 @@ def main() -> int:
                 orchestrator.set_time_query_storage(storage)
                 orchestrator.set_interaction_storage(storage)
                 logger.info("MongoDB storage connected (events, activities, interactions)")
+
+                # Initialize note and activity storage for note-taking and time tracking
+                from .storage.notes import NoteRepository, TimeTrackingActivityRepository
+
+                note_repo = NoteRepository(mongo_client.database["notes"])
+                activity_repo = TimeTrackingActivityRepository(
+                    mongo_client.database["time_activities"]
+                )
+                # Pass the existing "activities" collection for daily/weekly digests
+                # (contains paired start/end events with duration data)
+                orchestrator.set_note_storage(
+                    note_repo,
+                    activity_repo,
+                    paired_activities_collection=mongo_client.database["activities"],
+                )
+                logger.info("Note and activity storage configured")
             else:
                 logger.warning("MongoDB not available - time queries will be disabled")
         except Exception as e:

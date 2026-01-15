@@ -402,6 +402,127 @@ class MongoActivityDataSource:
         ]
 
 
+class PairedActivityDataSource:
+    """Adapter for digest generators to use paired ActivityDTO data.
+
+    Converts ActivityDTO (from ActivityRepository with duration_ms)
+    to the format expected by DailyDigestGenerator and WeeklyDigestGenerator.
+    """
+
+    def __init__(self, collection: Collection[dict[str, Any]]) -> None:
+        """Initialize with MongoDB collection.
+
+        Args:
+            collection: MongoDB collection for activities (paired start/end events).
+        """
+        self._collection = collection
+
+    def get_activities_for_date(
+        self, target_date: date, user_id: str  # noqa: ARG002
+    ) -> list[dict[str, Any]]:
+        """Get activities for a specific date as dicts.
+
+        Args:
+            target_date: The date to query (interpreted as local date).
+            user_id: User ID to filter by (unused - ActivityDTO has no user_id).
+
+        Returns:
+            List of activity dicts for digest processing.
+        """
+        # Use local timezone for date boundaries, then convert to UTC
+        local_start = datetime.combine(target_date, datetime.min.time()).astimezone()
+        local_end = datetime.combine(target_date + timedelta(days=1), datetime.min.time()).astimezone()
+
+        start_of_day = local_start.astimezone(UTC)
+        end_of_day = local_end.astimezone(UTC)
+
+        cursor = self._collection.find(
+            {"start_time": {"$gte": start_of_day, "$lt": end_of_day}}
+        ).sort("start_time", ASCENDING)
+
+        return [self._to_digest_dict(doc) for doc in cursor]
+
+    def get_activities_for_date_range(
+        self, start_date: date, end_date: date, user_id: str  # noqa: ARG002
+    ) -> list[dict[str, Any]]:
+        """Get activities for a date range as dicts.
+
+        Args:
+            start_date: Start of range (inclusive).
+            end_date: End of range (inclusive).
+            user_id: User ID to filter by (unused - ActivityDTO has no user_id).
+
+        Returns:
+            List of activity dicts for digest processing.
+        """
+        start_dt = datetime.combine(start_date, datetime.min.time(), tzinfo=UTC)
+        end_dt = datetime.combine(end_date, datetime.max.time(), tzinfo=UTC)
+
+        cursor = self._collection.find(
+            {"start_time": {"$gte": start_dt, "$lte": end_dt}}
+        ).sort("start_time", ASCENDING)
+
+        return [self._to_digest_dict(doc) for doc in cursor]
+
+    def _to_digest_dict(self, doc: dict[str, Any]) -> dict[str, Any]:
+        """Convert MongoDB document to digest-compatible dict.
+
+        Args:
+            doc: Raw MongoDB document.
+
+        Returns:
+            Dict with name, category, start_time, end_time, duration_minutes, status.
+        """
+        # Convert duration_ms to duration_minutes
+        duration_ms = doc.get("duration_ms") or 0
+        duration_minutes = duration_ms // 60000  # ms to minutes
+
+        # Derive category from name (simple heuristic)
+        name = doc.get("name", "").lower()
+        category = self._categorize_activity(name)
+
+        return {
+            "name": doc.get("name", "unknown"),
+            "category": category,
+            "start_time": doc.get("start_time"),
+            "end_time": doc.get("end_time"),
+            "duration_minutes": duration_minutes,
+            "status": doc.get("status", "completed"),
+        }
+
+    def _categorize_activity(self, name: str) -> str:
+        """Derive category from activity name.
+
+        Args:
+            name: Activity name (lowercase).
+
+        Returns:
+            Category string.
+        """
+        # Work-related keywords
+        if any(
+            kw in name
+            for kw in ["work", "meeting", "project", "code", "email", "call", "proposal"]
+        ):
+            return "work"
+
+        # Health/fitness keywords
+        if any(kw in name for kw in ["gym", "workout", "exercise", "run", "walk", "yoga"]):
+            return "health"
+
+        # Personal keywords
+        if any(
+            kw in name for kw in ["lunch", "dinner", "breakfast", "break", "rest", "nap"]
+        ):
+            return "personal"
+
+        # Errands
+        if any(kw in name for kw in ["shop", "errand", "grocery", "pick up", "drop off"]):
+            return "errands"
+
+        return "uncategorized"
+
+
 class MongoNoteDataSource:
     """Adapter for digest generators to fetch note data.
 
@@ -422,14 +543,20 @@ class MongoNoteDataSource:
         """Get notes for a specific date as dicts.
 
         Args:
-            target_date: The date to query.
+            target_date: The date to query (interpreted as local date).
             user_id: User ID to filter by.
 
         Returns:
             List of note dicts with action_items.
         """
-        start_of_day = datetime.combine(target_date, datetime.min.time(), tzinfo=UTC)
-        end_of_day = start_of_day + timedelta(days=1)
+        # Use local timezone for date boundaries, then convert to UTC
+        # This ensures "today" means the user's local day, not UTC day
+        local_start = datetime.combine(target_date, datetime.min.time()).astimezone()
+        local_end = datetime.combine(target_date + timedelta(days=1), datetime.min.time()).astimezone()
+
+        # Convert to UTC for MongoDB query
+        start_of_day = local_start.astimezone(UTC)
+        end_of_day = local_end.astimezone(UTC)
 
         # Query notes for this date
         cursor = self._repository._collection.find(
@@ -454,5 +581,6 @@ __all__ = [
     "MongoActivityDataSource",
     "MongoNoteDataSource",
     "NoteRepository",
+    "PairedActivityDataSource",
     "TimeTrackingActivityRepository",
 ]

@@ -1956,6 +1956,7 @@ class Orchestrator:
         note_repository: object,
         activity_repository: object,
         llm: object | None = None,
+        paired_activities_collection: object | None = None,
     ) -> None:
         """Set storage for notes and time tracking (call when MongoDB is available).
 
@@ -1963,14 +1964,30 @@ class Orchestrator:
             note_repository: NoteRepository instance for note storage.
             activity_repository: TimeTrackingActivityRepository instance.
             llm: Optional LLM for entity extraction. Uses self._llm if not provided.
+            paired_activities_collection: Optional MongoDB collection for paired
+                activities (from ActivityRepository). If provided, uses this as the
+                primary data source for daily/weekly digests.
         """
         from ..notes.extractor import EntityExtractor
-        from ..storage.notes import MongoActivityDataSource, MongoNoteDataSource
+        from ..storage.notes import (
+            MongoActivityDataSource,
+            MongoNoteDataSource,
+            PairedActivityDataSource,
+        )
 
         self._note_repository = note_repository
         self._activity_repository = activity_repository
-        self._activity_data_source = MongoActivityDataSource(activity_repository)  # type: ignore
         self._note_data_source = MongoNoteDataSource(note_repository)  # type: ignore
+
+        # Use paired activities collection if provided (has existing data),
+        # otherwise fall back to time tracking activities
+        if paired_activities_collection is not None:
+            self._activity_data_source = PairedActivityDataSource(
+                paired_activities_collection  # type: ignore
+            )
+            logger.info("Using paired activities collection for digests")
+        else:
+            self._activity_data_source = MongoActivityDataSource(activity_repository)  # type: ignore
 
         # Set up entity extractor with LLM
         extractor_llm = llm or self._llm

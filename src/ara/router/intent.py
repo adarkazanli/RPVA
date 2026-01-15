@@ -370,12 +370,16 @@ class IntentClassifier:
 
     # Daily digest patterns - "how did I spend my time today?"
     DIGEST_DAILY_PATTERNS = [
-        r"how\s+(?:did\s+)?(?:I|we)\s+spend\s+(?:my|our)\s+time\s+today",
+        r"how\s+(?:did\s+)?(?:I|we)\s+spend\s+(?:my|our)\s+(?:time|day)\s+today",
+        r"how\s+(?:did\s+)?(?:I|we)\s+spend\s+(?:my|our)\s+(?:time|day)$",
+        r"how\s+(?:did\s+)?(?:I|we)\s+spend\s+today",
         r"what\s+(?:did\s+)?(?:I|we)\s+do\s+today",
         r"(?:summarize|summary\s+of)\s+(?:my\s+)?(?:day|today)",
+        r"summarize\s+(?:the\s+)?day",
         r"(?:daily|today'?s?)\s+(?:time\s+)?(?:summary|breakdown|digest)",
         r"how\s+(?:was|did)\s+(?:my\s+)?day\s+(?:go|look)",
         r"what\s+(?:did\s+)?(?:I|we)\s+(?:do|accomplish)\s+(?:this\s+)?(?:morning|afternoon|evening)",
+        r"(?:give\s+me\s+)?(?:a\s+)?(?:recap|rundown)\s+(?:of\s+)?(?:my\s+)?(?:day|today)",
     ]
 
     # Weekly digest patterns - "how did I spend my time this week?"
