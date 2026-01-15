@@ -39,6 +39,7 @@ class IntentType(Enum):
     ACTIVITY_STOP = "activity_stop"  # "done with X", "finished X"
     DIGEST_DAILY = "digest_daily"  # "how did I spend my time today?"
     DIGEST_WEEKLY = "digest_weekly"  # "how did I spend my time this week?"
+    ACTION_ITEMS_QUERY = "action_items_query"  # "what are my action items?"
     UNKNOWN = "unknown"
 
 
@@ -380,7 +381,10 @@ class IntentClassifier:
         r"how\s+(?:was|did)\s+(?:my\s+)?day\s+(?:go|look)",
         r"what\s+(?:did\s+)?(?:I|we)\s+(?:do|accomplish)\s+(?:this\s+)?(?:morning|afternoon|evening)",
         r"(?:give\s+me\s+)?(?:a\s+)?(?:recap|rundown)\s+(?:of\s+)?(?:my\s+)?(?:day|today)",
-        # Action item queries - route to daily digest which includes action items
+    ]
+
+    # Action item query patterns - "what are my action items?"
+    ACTION_ITEMS_PATTERNS = [
         r"(?:what\s+are\s+)?(?:my\s+)?action\s*items?\s*(?:for\s+)?(?:today)?",
         r"(?:list|show|tell\s+me)\s+(?:my\s+)?action\s*items?",
         r"what\s+(?:do\s+)?(?:I|we)\s+(?:need|have)\s+to\s+do\s*(?:today)?",
@@ -442,6 +446,7 @@ class IntentClassifier:
         self._activity_stop = [re.compile(p, re.IGNORECASE) for p in self.ACTIVITY_STOP_PATTERNS]
         self._digest_daily = [re.compile(p, re.IGNORECASE) for p in self.DIGEST_DAILY_PATTERNS]
         self._digest_weekly = [re.compile(p, re.IGNORECASE) for p in self.DIGEST_WEEKLY_PATTERNS]
+        self._action_items = [re.compile(p, re.IGNORECASE) for p in self.ACTION_ITEMS_PATTERNS]
 
     def classify(self, text: str) -> Intent:
         """Classify the given text into an intent.
@@ -526,7 +531,9 @@ class IntentClassifier:
             return intent
 
         # Note-taking & time tracking intents (005-time-tracking-notes)
-        # Check digest patterns first (more specific)
+        # Check action items first (most specific), then digest patterns
+        if intent := self._try_action_items(text):
+            return intent
         if intent := self._try_digest_daily(text):
             return intent
         if intent := self._try_digest_weekly(text):
@@ -1061,6 +1068,22 @@ class IntentClassifier:
                     type=IntentType.ACTIVITY_STOP,
                     confidence=0.95,
                     entities=entities,
+                    raw_text=text,
+                )
+        return None
+
+    def _try_action_items(self, text: str) -> Intent | None:
+        """Try to match action items query patterns.
+
+        Examples: "what are my action items?", "what do I need to do today?"
+        """
+        for pattern in self._action_items:
+            match = pattern.search(text)
+            if match:
+                return Intent(
+                    type=IntentType.ACTION_ITEMS_QUERY,
+                    confidence=0.95,
+                    entities={},
                     raw_text=text,
                 )
         return None

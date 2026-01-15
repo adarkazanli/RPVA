@@ -631,6 +631,8 @@ class Orchestrator:
             return self._handle_digest_daily(intent)
         elif intent.type == IntentType.DIGEST_WEEKLY:
             return self._handle_digest_weekly(intent)
+        elif intent.type == IntentType.ACTION_ITEMS_QUERY:
+            return self._handle_action_items(intent)
         else:
             # Use QueryRouter for smart routing of general questions
             routing_decision = self._query_router.classify(intent.raw_text)
@@ -1934,6 +1936,46 @@ class Orchestrator:
             return f"{digest.summary} {insights[0].description}"
 
         return digest.summary
+
+    def _handle_action_items(self, _intent: Intent) -> str:
+        """Handle action items query intent ('what are my action items?').
+
+        Args:
+            _intent: Classified intent (unused, kept for interface consistency).
+
+        Returns:
+            Response listing today's action items.
+        """
+        from datetime import date
+
+        logger.info("Action items query requested")
+
+        if not self._note_data_source:
+            return "I don't have any action items tracked yet."
+
+        # Fetch action items from today's notes
+        today = date.today()
+        notes = self._note_data_source.get_notes_for_date(today, "default")
+
+        action_items: list[str] = []
+        for note in notes:
+            items = note.get("action_items", [])
+            action_items.extend(items)
+
+        if not action_items:
+            return "You don't have any action items for today."
+
+        # Build response listing all action items
+        name = self._user_name or ""
+        greeting = f"Here are your action items{', ' + name if name else ''}:"
+
+        if len(action_items) == 1:
+            return f"{greeting} {action_items[0]}."
+        elif len(action_items) == 2:
+            return f"{greeting} {action_items[0]}, and {action_items[1]}."
+        else:
+            items_list = ", ".join(action_items[:-1])
+            return f"{greeting} {items_list}, and {action_items[-1]}."
 
     def set_time_query_storage(self, storage: object) -> None:
         """Set storage for time queries (call when MongoDB is available).
