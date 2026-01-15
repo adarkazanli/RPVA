@@ -1937,25 +1937,35 @@ class Orchestrator:
 
         return digest.summary
 
-    def _handle_action_items(self, _intent: Intent) -> str:
+    def _handle_action_items(self, intent: Intent) -> str:
         """Handle action items query intent ('what are my action items?').
 
         Args:
-            _intent: Classified intent (unused, kept for interface consistency).
+            intent: Classified intent with optional date_ref entity.
 
         Returns:
-            Response listing today's action items.
+            Response listing action items for the specified date.
         """
-        from datetime import date
+        from datetime import date, timedelta
 
         logger.info("Action items query requested")
 
         if not self._note_data_source:
             return "I don't have any action items tracked yet."
 
-        # Fetch action items from today's notes
-        today = date.today()
-        notes = self._note_data_source.get_notes_for_date(today, "default")
+        # Determine which date to query
+        date_ref = intent.entities.get("date_ref", "").lower()
+        if date_ref == "yesterday":
+            target_date = date.today() - timedelta(days=1)
+            date_label = "yesterday"
+        else:
+            target_date = date.today()
+            date_label = "today"
+
+        logger.info(f"Fetching action items for {date_label} ({target_date})")
+
+        # Fetch action items from notes for the target date
+        notes = self._note_data_source.get_notes_for_date(target_date, "default")
 
         action_items: list[str] = []
         for note in notes:
@@ -1963,11 +1973,14 @@ class Orchestrator:
             action_items.extend(items)
 
         if not action_items:
-            return "You don't have any action items for today."
+            return f"You don't have any action items from {date_label}."
 
         # Build response listing all action items
         name = self._user_name or ""
-        greeting = f"Here are your action items{', ' + name if name else ''}:"
+        if date_label == "yesterday":
+            greeting = f"Here are your action items from yesterday{', ' + name if name else ''}:"
+        else:
+            greeting = f"Here are your action items{', ' + name if name else ''}:"
 
         if len(action_items) == 1:
             return f"{greeting} {action_items[0]}."

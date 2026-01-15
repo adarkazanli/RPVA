@@ -384,12 +384,14 @@ class IntentClassifier:
     ]
 
     # Action item query patterns - "what are my action items?"
+    # Capture optional date reference (today, yesterday, etc.) in group
     ACTION_ITEMS_PATTERNS = [
-        r"(?:what\s+are\s+)?(?:my\s+)?action\s*items?\s*(?:for\s+)?(?:today)?",
-        r"(?:list|show|tell\s+me)\s+(?:my\s+)?action\s*items?",
-        r"what\s+(?:do\s+)?(?:I|we)\s+(?:need|have)\s+to\s+do\s*(?:today)?",
-        r"(?:what'?s?\s+)?(?:on\s+)?(?:my\s+)?(?:to\s*-?\s*do|todo)\s*(?:list)?",
-        r"(?:any\s+)?(?:pending\s+)?(?:tasks?|items?)\s+(?:for\s+)?(?:me\s+)?(?:today)?",
+        r"(?:what\s+(?:are|were)\s+)?(?:my\s+)?action\s*items?\s*(?:for\s+|from\s+)?(today|yesterday)?",
+        r"(?:list|show|tell\s+me)\s+(?:my\s+)?action\s*items?\s*(?:for\s+|from\s+)?(today|yesterday)?",
+        r"what\s+(?:do\s+)?(?:I|we)\s+(?:need|have)\s+to\s+do\s*(?:for\s+|from\s+)?(today|yesterday)?",
+        r"(?:what'?s?\s+)?(?:on\s+)?(?:my\s+)?(?:to\s*-?\s*do|todo)\s*(?:list)?\s*(?:for\s+|from\s+)?(today|yesterday)?",
+        r"(?:any\s+)?(?:pending\s+)?(?:tasks?|items?)\s+(?:for\s+|from\s+)?(?:me\s+)?(today|yesterday)?",
+        r"(?:yesterday'?s?\s+)?action\s*items?",
     ]
 
     # Weekly digest patterns - "how did I spend my time this week?"
@@ -1075,15 +1077,26 @@ class IntentClassifier:
     def _try_action_items(self, text: str) -> Intent | None:
         """Try to match action items query patterns.
 
-        Examples: "what are my action items?", "what do I need to do today?"
+        Examples: "what are my action items?", "what do I need to do today?",
+                  "what were my action items from yesterday?"
         """
         for pattern in self._action_items:
             match = pattern.search(text)
             if match:
+                entities = {}
+                groups = match.groups()
+
+                # Extract date reference if captured (today, yesterday)
+                if groups and groups[0]:
+                    entities["date_ref"] = groups[0].strip().lower()
+                elif "yesterday" in text.lower():
+                    # Handle "yesterday's action items" pattern
+                    entities["date_ref"] = "yesterday"
+
                 return Intent(
                     type=IntentType.ACTION_ITEMS_QUERY,
                     confidence=0.95,
-                    entities={},
+                    entities=entities,
                     raw_text=text,
                 )
         return None
