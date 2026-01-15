@@ -1855,9 +1855,8 @@ class Orchestrator:
         if not active:
             return "You don't have any active activity to stop."
 
-        # If activity name provided, verify it matches (fuzzy)
-        if activity_name and activity_name.lower() not in active.name.lower():
-            return f"Your current activity is '{active.name}', not '{activity_name}'. Say 'done with {active.name}' to stop it."
+        # Just stop the current activity - user knows what they're working on
+        # No need to require exact name match (they may describe it differently)
 
         # Complete the activity
         active.end_time = datetime.now(UTC)
