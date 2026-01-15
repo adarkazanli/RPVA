@@ -328,6 +328,142 @@ journalctl -u ara -f  # View logs
 
 ---
 
+### Docker Setup (MongoDB)
+
+Ara uses MongoDB for persistent storage of notes, activities, and interaction history. Docker is the recommended way to run MongoDB.
+
+#### Installing Docker on macOS
+
+1. **Download Docker Desktop**:
+   - Visit [https://www.docker.com/products/docker-desktop/](https://www.docker.com/products/docker-desktop/)
+   - Download Docker Desktop for Mac (Apple Silicon or Intel)
+
+2. **Install and Start**:
+   ```bash
+   # After installing, start Docker Desktop from Applications
+   # Verify installation
+   docker --version
+   docker-compose --version
+   ```
+
+3. **Run MongoDB**:
+   ```bash
+   cd RPVA/docker
+
+   # For Apple Silicon (M1/M2/M3) - use the default ARM64 image
+   docker-compose up -d
+
+   # For Intel Mac - update the image first
+   sed -i '' 's|arm64v8/mongo:4.4.18|mongo:4.4|' docker-compose.yml
+   docker-compose up -d
+   ```
+
+#### Installing Docker on Raspberry Pi
+
+1. **Install Docker using the convenience script**:
+   ```bash
+   # Update system
+   sudo apt update && sudo apt upgrade -y
+
+   # Install Docker
+   curl -fsSL https://get.docker.com -o get-docker.sh
+   sudo sh get-docker.sh
+
+   # Add your user to docker group (avoid using sudo)
+   sudo usermod -aG docker $USER
+
+   # Log out and back in, then verify
+   docker --version
+   ```
+
+2. **Install Docker Compose**:
+   ```bash
+   # Install docker-compose plugin
+   sudo apt install docker-compose-plugin -y
+
+   # Or install standalone docker-compose
+   sudo pip3 install docker-compose
+
+   # Verify
+   docker compose version
+   ```
+
+3. **Run MongoDB**:
+   ```bash
+   cd ~/RPVA/docker
+
+   # The default image (arm64v8/mongo:4.4.18) works on Raspberry Pi 4
+   docker-compose up -d
+
+   # Verify MongoDB is running
+   docker ps
+   docker logs ara_mongodb
+   ```
+
+#### Docker Commands Reference
+
+| Command | Description |
+|---------|-------------|
+| `docker-compose up -d` | Start MongoDB in background |
+| `docker-compose down` | Stop MongoDB |
+| `docker-compose logs -f` | View MongoDB logs |
+| `docker ps` | List running containers |
+| `docker exec -it ara_mongodb mongo` | Connect to MongoDB shell |
+
+#### MongoDB Connection
+
+Once MongoDB is running, Ara connects automatically. The default connection string:
+
+```
+mongodb://localhost:27017/ara
+```
+
+To verify the connection:
+
+```bash
+# Test MongoDB connection
+docker exec -it ara_mongodb mongo --eval "db.runCommand('ping')"
+
+# Or using mongosh (if installed locally)
+mongosh "mongodb://localhost:27017/ara" --eval "db.stats()"
+```
+
+#### Auto-Start MongoDB on Boot (Raspberry Pi)
+
+```bash
+# Enable Docker to start on boot
+sudo systemctl enable docker
+
+# The container has restart: unless-stopped, so it will auto-start
+# To verify after reboot:
+docker ps
+```
+
+#### Troubleshooting Docker
+
+```bash
+# Check if Docker daemon is running
+sudo systemctl status docker
+
+# Restart Docker
+sudo systemctl restart docker
+
+# Check container logs
+docker logs ara_mongodb
+
+# Remove and recreate container (data persists in volume)
+docker-compose down
+docker-compose up -d
+
+# Check disk space (MongoDB needs space)
+df -h
+
+# Check memory usage
+docker stats ara_mongodb
+```
+
+---
+
 ### Troubleshooting
 
 #### Audio Issues
@@ -517,6 +653,8 @@ RPVA/
 │   ├── base.yaml                      # Base configuration
 │   ├── dev.yaml                       # Development settings
 │   └── prod.yaml                      # Production settings
+├── docker/                            # Docker configuration
+│   └── docker-compose.yml             # MongoDB container setup
 └── .specify/                          # Project specifications
     ├── memory/
     │   └── constitution.md            # Development principles
