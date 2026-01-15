@@ -40,6 +40,7 @@ class IntentType(Enum):
     DIGEST_DAILY = "digest_daily"  # "how did I spend my time today?"
     DIGEST_WEEKLY = "digest_weekly"  # "how did I spend my time this week?"
     ACTION_ITEMS_QUERY = "action_items_query"  # "what are my action items?"
+    EMAIL_ACTION_ITEMS = "email_action_items"  # "email me my action items"
     UNKNOWN = "unknown"
 
 
@@ -394,6 +395,15 @@ class IntentClassifier:
         r"(?:yesterday'?s?\s+)?action\s*items?",
     ]
 
+    # Email action items patterns - "email me my action items"
+    # Capture optional date reference (today, yesterday) in group
+    EMAIL_ACTION_ITEMS_PATTERNS = [
+        r"(?:email|send)\s+(?:me\s+)?(?:my\s+)?action\s*items?\s*(?:to\s+)?(?:my\s+)?(?:email)?\s*(?:for\s+|from\s+)?(today|yesterday)?",
+        r"(?:send|email)\s+(?:my\s+)?action\s*items?\s+(?:to\s+)?(?:my\s+)?email\s*(?:for\s+|from\s+)?(today|yesterday)?",
+        r"(?:email|send)\s+(?:me\s+)?(?:yesterday'?s?\s+)?action\s*items?",
+        r"(?:can\s+you\s+)?(?:please\s+)?(?:email|send)\s+(?:me\s+)?(?:my\s+)?(?:today'?s?\s+)?action\s*items?",
+    ]
+
     # Weekly digest patterns - "how did I spend my time this week?"
     DIGEST_WEEKLY_PATTERNS = [
         r"how\s+(?:did\s+)?(?:I|we)\s+spend\s+(?:my|our)\s+time\s+(?:this\s+)?week",
@@ -449,6 +459,9 @@ class IntentClassifier:
         self._digest_daily = [re.compile(p, re.IGNORECASE) for p in self.DIGEST_DAILY_PATTERNS]
         self._digest_weekly = [re.compile(p, re.IGNORECASE) for p in self.DIGEST_WEEKLY_PATTERNS]
         self._action_items = [re.compile(p, re.IGNORECASE) for p in self.ACTION_ITEMS_PATTERNS]
+        self._email_action_items = [
+            re.compile(p, re.IGNORECASE) for p in self.EMAIL_ACTION_ITEMS_PATTERNS
+        ]
 
     def classify(self, text: str) -> Intent:
         """Classify the given text into an intent.
@@ -533,7 +546,9 @@ class IntentClassifier:
             return intent
 
         # Note-taking & time tracking intents (005-time-tracking-notes)
-        # Check action items first (most specific), then digest patterns
+        # Check email action items first (most specific), then action items, then digest patterns
+        if intent := self._try_email_action_items(text):
+            return intent
         if intent := self._try_action_items(text):
             return intent
         if intent := self._try_digest_daily(text):
@@ -1068,6 +1083,33 @@ class IntentClassifier:
 
                 return Intent(
                     type=IntentType.ACTIVITY_STOP,
+                    confidence=0.95,
+                    entities=entities,
+                    raw_text=text,
+                )
+        return None
+
+    def _try_email_action_items(self, text: str) -> Intent | None:
+        """Try to match email action items patterns.
+
+        Examples: "email me my action items", "send my action items to my email",
+                  "email me yesterday's action items"
+        """
+        for pattern in self._email_action_items:
+            match = pattern.search(text)
+            if match:
+                entities = {}
+                groups = match.groups()
+
+                # Extract date reference if captured (today, yesterday)
+                if groups and groups[0]:
+                    entities["date_ref"] = groups[0].strip().lower()
+                elif "yesterday" in text.lower():
+                    # Handle "yesterday's action items" pattern
+                    entities["date_ref"] = "yesterday"
+
+                return Intent(
+                    type=IntentType.EMAIL_ACTION_ITEMS,
                     confidence=0.95,
                     entities=entities,
                     raw_text=text,
