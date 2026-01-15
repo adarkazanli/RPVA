@@ -34,6 +34,9 @@ PYTHONPATH=src python -m ara --profile dev
 - **Privacy-First**: All processing happens locally
 - **Natural Voice**: High-quality text-to-speech output
 - **Optional Web Search**: On-demand internet access with trigger phrases
+- **Voice Notes**: Capture notes with automatic entity extraction (people, topics, locations)
+- **Time Tracking**: Track activity duration with start/stop commands
+- **Daily/Weekly Digests**: Get summaries of how you spend your time
 
 ## Architecture
 
@@ -341,16 +344,96 @@ python --version
 
 ## Voice Commands
 
-| Command Type | Example |
-|--------------|---------|
-| Wake word | "Porcupine" (default) or custom trained keyword |
-| Time | "[wake word], what time is it?" |
-| Date | "[wake word], what's today's date?" |
-| General question | "[wake word], what is the capital of France?" |
-| Web search | "[wake word] **with internet**, search for..." |
-| News | "[wake word], **check the news** about..." |
+### General Commands
+
+| Command Type | Example | Keywords |
+|--------------|---------|----------|
+| Wake word | "Porcupine" (default) or custom trained keyword | - |
+| Time | "[wake word], what time is it?" | - |
+| Date | "[wake word], what's today's date?" | - |
+| General question | "[wake word], what is the capital of France?" | - |
+| Web search | "[wake word] **with internet**, search for..." | `with internet`, `search online` |
+| News | "[wake word], **check the news** about..." | `check the news`, `latest news` |
+
+### Voice Notes
+
+Capture notes with automatic extraction of people, topics, and locations.
+
+| Action | Example | Keywords |
+|--------|---------|----------|
+| Capture note | "[wake word], **remember that** I met with John about the project" | `remember that`, `note that`, `make a note` |
+| Query notes | "[wake word], **what did I say about** the meeting?" | `what did I say about`, `notes about`, `find notes` |
+
+### Time Tracking
+
+Track how you spend your time with start/stop activity commands.
+
+| Action | Example | Keywords |
+|--------|---------|----------|
+| Start activity | "[wake word], **starting** work on the report" | `starting`, `start`, `begin`, `working on` |
+| Stop activity | "[wake word], **done with** the report" | `done with`, `finished`, `stopped`, `completed` |
+| Daily digest | "[wake word], **how did I spend my time today?**" | `how did I spend`, `today's summary`, `daily digest` |
+| Weekly digest | "[wake word], **give me a weekly summary**" | `weekly summary`, `this week`, `weekly insights` |
+
+### Categories
+
+Activities and notes are auto-categorized into:
+
+| Category | Keywords that trigger it |
+|----------|-------------------------|
+| **Work** | meeting, call, project, deadline, client, coding, presentation |
+| **Health** | workout, exercise, gym, running, yoga, meditation, doctor |
+| **Errands** | groceries, shopping, pharmacy, bank, appointment, pickup |
+| **Personal** | family, friend, dinner, movie, reading, relax, vacation |
 
 > **Tip:** After saying the wake word, wait for a brief moment, then speak your question clearly. Ara will automatically detect when you've finished speaking.
+
+---
+
+## Note-Taking & Time Tracking
+
+### How It Works
+
+**Voice Notes** automatically extract entities from your speech:
+- **People**: Names mentioned (e.g., "I met with **John** and **Sarah**")
+- **Topics**: Subjects discussed (e.g., "about the **quarterly budget**")
+- **Locations**: Places mentioned (e.g., "at the **downtown office**")
+
+**Time Tracking** monitors activity duration:
+- Say "**starting** [activity]" to begin tracking
+- Say "**done with** [activity]" to stop and calculate duration
+- Only one activity can be active at a time (starting a new one auto-closes the previous)
+- Activities auto-close after 4 hours if you forget to stop them
+
+### Example Workflow
+
+```
+You: "Porcupine, starting work on the quarterly report"
+Ara: "Started tracking: work on the quarterly report"
+
+... 2 hours later ...
+
+You: "Porcupine, done with the report"
+Ara: "Completed: work on the quarterly report. Duration: 2 hours 5 minutes"
+
+... end of day ...
+
+You: "Porcupine, how did I spend my time today?"
+Ara: "Today you spent 2 hours on work, 45 minutes on health, and 30 minutes on errands.
+      Total: 3 hours and 15 minutes."
+```
+
+### Insights & Patterns
+
+Ask for weekly insights to understand your time allocation:
+
+```
+You: "Porcupine, give me a weekly summary"
+Ara: "This week you tracked 18 hours total. You spent 12 hours on work and 4 hours on health.
+      Tuesday was your busiest day with 5 hours."
+```
+
+---
 
 ## Performance Targets
 
@@ -372,7 +455,10 @@ RPVA/
 │   ├── router/                        # Pipeline orchestration
 │   ├── stt/                           # Speech-to-text
 │   ├── tts/                           # Text-to-speech
-│   └── wake_word/                     # Wake word detection
+│   ├── wake_word/                     # Wake word detection
+│   ├── notes/                         # Voice notes & entity extraction
+│   ├── activities/                    # Activity duration tracking
+│   └── digest/                        # Daily/weekly time summaries
 ├── tests/                             # Test suite
 │   ├── unit/                          # Unit tests
 │   ├── integration/                   # Integration tests
