@@ -227,8 +227,9 @@ class Orchestrator:
         self._check_thread: threading.Thread | None = None
 
         # Configuration
-        self._silence_timeout_ms = 2000  # Stop recording after 2s silence
-        self._max_recording_ms = 10000  # Max 10s recording
+        self._silence_timeout_ms = 5000  # Stop recording after 5s silence
+        self._max_recording_ms = 180000  # Max 3 minute recording
+        self._stop_keyword = "done porcupine"  # Keyword to end recording
 
         # Load personality configuration
         self._personality = get_default_personality()
@@ -371,6 +372,13 @@ class Orchestrator:
             transcript_result = self._transcriber.transcribe(audio_data, 16000)
             transcript = transcript_result.text.strip()
 
+            # Strip stop keyword if present (case-insensitive)
+            if transcript.lower().endswith(self._stop_keyword):
+                transcript = transcript[: -len(self._stop_keyword)].strip()
+                # Also handle punctuation before the keyword
+                transcript = transcript.rstrip(".,;:!?")
+                logger.info(f"Stop keyword detected, stripped from transcript")
+
             if not transcript:
                 logger.warning("Empty transcription")
                 return None
@@ -413,6 +421,11 @@ class Orchestrator:
                     # Process the follow-up
                     follow_up_result = self._transcriber.transcribe(follow_up_audio, 16000)
                     follow_up_text = follow_up_result.text.strip()
+
+                    # Strip stop keyword if present
+                    if follow_up_text.lower().endswith(self._stop_keyword):
+                        follow_up_text = follow_up_text[: -len(self._stop_keyword)].strip()
+                        follow_up_text = follow_up_text.rstrip(".,;:!?")
 
                     if follow_up_text:
                         logger.info(f"Follow-up: '{follow_up_text}'")
