@@ -32,6 +32,13 @@ class IntentType(Enum):
     DURATION_QUERY = "duration_query"  # "how long was I in the shower?"
     ACTIVITY_SEARCH = "activity_search"  # "what was I doing around 10 AM?"
     EVENT_LOG = "event_log"  # "I'm going to the gym" (activity start/end)
+    # Note-taking & time tracking intents (005-time-tracking-notes)
+    NOTE_CAPTURE = "note_capture"  # "note that...", "remember..."
+    NOTE_QUERY = "note_query"  # "what did I discuss with John?"
+    ACTIVITY_START = "activity_start"  # "starting X", "beginning X"
+    ACTIVITY_STOP = "activity_stop"  # "done with X", "finished X"
+    DIGEST_DAILY = "digest_daily"  # "how did I spend my time today?"
+    DIGEST_WEEKLY = "digest_weekly"  # "how did I spend my time this week?"
     UNKNOWN = "unknown"
 
 
@@ -317,23 +324,65 @@ class IntentClassifier:
     EVENT_LOG_PATTERNS = [
         # Activity start patterns
         r"(?:i'?m|i\s+am)\s+(?:going|heading|off)\s+to\s+(?:the\s+)?(.+)",
-        r"(?:i'?m|i\s+am)\s+(?:starting|beginning)\s+(?:my\s+)?(.+)",
         r"(?:i'?m|i\s+am)\s+about\s+to\s+(?:start\s+)?(.+)",
         r"(?:i'?m|i\s+am)\s+(?:going\s+)?(?:to\s+)?(?:take|have)\s+(?:a\s+)?(.+)",
-        r"(?:starting|beginning)\s+(?:my\s+)?(.+?)(?:\s+now)?$",
         # Activity end patterns
-        r"(?:i'?m|i\s+am)\s+(?:done|finished|back)\s+(?:with\s+)?(?:my\s+)?(?:the\s+)?(.+)?",
-        r"(?:just\s+)?finished\s+(?:my\s+)?(?:the\s+)?(.+)",
-        r"(?:just\s+)?(?:got\s+)?(?:done|completed)\s+(?:with\s+)?(?:my\s+)?(?:the\s+)?(.+)",
         r"(?:i'?m|i\s+am)\s+(?:leaving|left)\s+(?:the\s+)?(.+)",
-        r"(?:ended|stopped)\s+(?:my\s+)?(.+)",
         # Note/memo patterns
-        r"(?:remember|note|memo)[,:\s]+(.+)",
-        r"(?:make\s+a\s+)?note[:\s]+(?!of\s+that)(.+)",  # Exclude "of that" back-reference
         r"(?:i\s+)?parked\s+(?:at|in|on)\s+(.+)",
         # Location statements
         r"(?:i'?m|i\s+am)\s+(?:at|in)\s+(.+?)(?:\s+right\s+now)?(?:\.|$)",
         r"(?:i'?m|i\s+am)\s+(?:currently\s+)?(?:at|in)\s+(.+)",
+    ]
+
+    # Note capture patterns - "note that...", "remember that..."
+    NOTE_CAPTURE_PATTERNS = [
+        r"(?:note|remember|memo)\s+(?:that\s+)?(.+)",
+        r"(?:make\s+a\s+)?note[:\s]+(?!of\s+that)(.+)",
+        r"(?:i\s+)?(?:just\s+)?(?:had\s+a\s+)?(?:meeting|discussion|conversation|talk)\s+(?:with\s+)?(.+)",
+        r"(?:i\s+)?(?:just\s+)?(?:talked|spoke|met)\s+(?:to|with)\s+(.+)",
+    ]
+
+    # Note query patterns - "what did I discuss with John?"
+    NOTE_QUERY_PATTERNS = [
+        r"what\s+(?:did\s+)?(?:I|we)\s+(?:discuss|talk\s+about|mention)\s+(?:with\s+)?(.+)",
+        r"what\s+(?:have\s+)?(?:I|we)\s+(?:discussed|talked\s+about|mentioned)\s+(?:with\s+)?(.+)",
+        r"(?:show|list|find)\s+(?:my\s+)?notes?\s+(?:about|with|mentioning|involving)\s+(.+)",
+        r"(?:any\s+)?notes?\s+(?:about|with|mentioning|involving)\s+(.+)",
+    ]
+
+    # Activity start patterns - "starting X", "beginning X"
+    ACTIVITY_START_PATTERNS = [
+        r"(?:i'?m\s+)?(?:starting|beginning)\s+(?:my\s+)?(.+?)(?:\s+now)?$",
+        r"(?:i'?m\s+)?(?:going\s+to\s+)?start\s+(?:my\s+)?(.+?)(?:\s+now)?$",
+        r"(?:let'?s\s+)?(?:start|begin)\s+(?:my\s+)?(.+?)(?:\s+now)?$",
+    ]
+
+    # Activity stop patterns - "done with X", "finished X"
+    ACTIVITY_STOP_PATTERNS = [
+        r"(?:i'?m\s+)?(?:done|finished|completed)\s+(?:with\s+)?(?:my\s+)?(?:the\s+)?(.+)",
+        r"(?:just\s+)?(?:finished|completed|ended|stopped)\s+(?:my\s+)?(?:the\s+)?(.+)",
+        r"(?:i'?m\s+)?(?:done|finished)\s*$",  # Just "done" or "finished"
+    ]
+
+    # Daily digest patterns - "how did I spend my time today?"
+    DIGEST_DAILY_PATTERNS = [
+        r"how\s+(?:did\s+)?(?:I|we)\s+spend\s+(?:my|our)\s+time\s+today",
+        r"what\s+(?:did\s+)?(?:I|we)\s+do\s+today",
+        r"(?:summarize|summary\s+of)\s+(?:my\s+)?(?:day|today)",
+        r"(?:daily|today'?s?)\s+(?:time\s+)?(?:summary|breakdown|digest)",
+        r"how\s+(?:was|did)\s+(?:my\s+)?day\s+(?:go|look)",
+        r"what\s+(?:did\s+)?(?:I|we)\s+(?:do|accomplish)\s+(?:this\s+)?(?:morning|afternoon|evening)",
+    ]
+
+    # Weekly digest patterns - "how did I spend my time this week?"
+    DIGEST_WEEKLY_PATTERNS = [
+        r"how\s+(?:did\s+)?(?:I|we)\s+spend\s+(?:my|our)\s+time\s+(?:this\s+)?week",
+        r"what\s+(?:did\s+)?(?:I|we)\s+do\s+(?:this\s+)?week",
+        r"(?:summarize|summary\s+of)\s+(?:my\s+)?week",
+        r"(?:weekly)\s+(?:time\s+)?(?:summary|breakdown|digest|insights?)",
+        r"(?:what\s+)?patterns?\s+(?:do\s+you\s+see|in\s+my\s+time)",
+        r"(?:am\s+I|are\s+we)\s+spending\s+enough\s+time\s+on\s+(.+)",
     ]
 
     def __init__(self) -> None:
@@ -373,6 +422,13 @@ class IntentClassifier:
             re.compile(p, re.IGNORECASE) for p in self.ACTIVITY_SEARCH_PATTERNS
         ]
         self._event_log = [re.compile(p, re.IGNORECASE) for p in self.EVENT_LOG_PATTERNS]
+        # Note-taking & time tracking patterns (005-time-tracking-notes)
+        self._note_capture = [re.compile(p, re.IGNORECASE) for p in self.NOTE_CAPTURE_PATTERNS]
+        self._note_query = [re.compile(p, re.IGNORECASE) for p in self.NOTE_QUERY_PATTERNS]
+        self._activity_start = [re.compile(p, re.IGNORECASE) for p in self.ACTIVITY_START_PATTERNS]
+        self._activity_stop = [re.compile(p, re.IGNORECASE) for p in self.ACTIVITY_STOP_PATTERNS]
+        self._digest_daily = [re.compile(p, re.IGNORECASE) for p in self.DIGEST_DAILY_PATTERNS]
+        self._digest_weekly = [re.compile(p, re.IGNORECASE) for p in self.DIGEST_WEEKLY_PATTERNS]
 
     def classify(self, text: str) -> Intent:
         """Classify the given text into an intent.
@@ -451,6 +507,25 @@ class IntentClassifier:
             return intent
         if intent := self._try_activity_search(text):
             return intent
+
+        # Note-taking & time tracking intents (005-time-tracking-notes)
+        # Check digest patterns first (more specific)
+        if intent := self._try_digest_daily(text):
+            return intent
+        if intent := self._try_digest_weekly(text):
+            return intent
+        # Activity start/stop (more specific than event_log)
+        if intent := self._try_activity_start(text):
+            return intent
+        if intent := self._try_activity_stop(text):
+            return intent
+        # Note capture and query
+        if intent := self._try_note_query(text):
+            return intent
+        if intent := self._try_note_capture(text):
+            return intent
+
+        # Legacy event log (for location statements, etc.)
         if intent := self._try_event_log(text):
             return intent
 
@@ -880,6 +955,142 @@ class IntentClassifier:
                 return Intent(
                     type=IntentType.EVENT_LOG,
                     confidence=0.85,
+                    entities=entities,
+                    raw_text=text,
+                )
+        return None
+
+    def _try_note_capture(self, text: str) -> Intent | None:
+        """Try to match note capture patterns.
+
+        Examples: "note that I talked to John", "remember meeting with Sarah"
+        """
+        for pattern in self._note_capture:
+            match = pattern.search(text)
+            if match:
+                entities = {}
+                groups = match.groups()
+
+                if groups and groups[0]:
+                    entities["content"] = groups[0].strip()
+
+                return Intent(
+                    type=IntentType.NOTE_CAPTURE,
+                    confidence=0.9,
+                    entities=entities,
+                    raw_text=text,
+                )
+        return None
+
+    def _try_note_query(self, text: str) -> Intent | None:
+        """Try to match note query patterns.
+
+        Examples: "what did I discuss with John?", "show notes about budget"
+        """
+        for pattern in self._note_query:
+            match = pattern.search(text)
+            if match:
+                entities = {}
+                groups = match.groups()
+
+                if groups and groups[0]:
+                    # Could be person name or topic
+                    search_term = groups[0].strip().rstrip("?")
+                    entities["search_term"] = search_term
+
+                return Intent(
+                    type=IntentType.NOTE_QUERY,
+                    confidence=0.9,
+                    entities=entities,
+                    raw_text=text,
+                )
+        return None
+
+    def _try_activity_start(self, text: str) -> Intent | None:
+        """Try to match activity start patterns.
+
+        Examples: "starting my workout", "beginning coding"
+        """
+        for pattern in self._activity_start:
+            match = pattern.search(text)
+            if match:
+                entities = {}
+                groups = match.groups()
+
+                if groups and groups[0]:
+                    entities["activity"] = groups[0].strip()
+
+                return Intent(
+                    type=IntentType.ACTIVITY_START,
+                    confidence=0.95,
+                    entities=entities,
+                    raw_text=text,
+                )
+        return None
+
+    def _try_activity_stop(self, text: str) -> Intent | None:
+        """Try to match activity stop patterns.
+
+        Examples: "done with workout", "finished coding"
+        """
+        for pattern in self._activity_stop:
+            match = pattern.search(text)
+            if match:
+                entities = {}
+                groups = match.groups()
+
+                if groups and groups[0]:
+                    entities["activity"] = groups[0].strip()
+
+                return Intent(
+                    type=IntentType.ACTIVITY_STOP,
+                    confidence=0.95,
+                    entities=entities,
+                    raw_text=text,
+                )
+        return None
+
+    def _try_digest_daily(self, text: str) -> Intent | None:
+        """Try to match daily digest patterns.
+
+        Examples: "how did I spend my time today?", "summarize my day"
+        """
+        for pattern in self._digest_daily:
+            match = pattern.search(text)
+            if match:
+                entities = {}
+                groups = match.groups()
+
+                # Extract time range if specified (morning/afternoon/evening)
+                if groups and groups[0]:
+                    entities["time_range"] = groups[0].strip()
+
+                return Intent(
+                    type=IntentType.DIGEST_DAILY,
+                    confidence=0.95,
+                    entities=entities,
+                    raw_text=text,
+                )
+        return None
+
+    def _try_digest_weekly(self, text: str) -> Intent | None:
+        """Try to match weekly digest patterns.
+
+        Examples: "how did I spend my time this week?", "weekly summary"
+        """
+        for pattern in self._digest_weekly:
+            match = pattern.search(text)
+            if match:
+                entities = {}
+                groups = match.groups()
+
+                # Extract category if asking about specific category
+                if groups and groups[0]:
+                    entities["category"] = groups[0].strip()
+
+                return Intent(
+                    type=IntentType.DIGEST_WEEKLY,
+                    confidence=0.95,
                     entities=entities,
                     raw_text=text,
                 )
