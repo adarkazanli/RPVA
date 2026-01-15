@@ -345,10 +345,13 @@ class IntentClassifier:
 
     # Note query patterns - "what did I discuss with John?"
     NOTE_QUERY_PATTERNS = [
+        r"what\s+(?:did\s+)?(?:I|we)\s+(?:say|discuss|talk\s+about|mention)\s+(?:about\s+)?(.+)",
+        r"what\s+(?:have\s+)?(?:I|we)\s+(?:said|discussed|talked\s+about|mentioned)\s+(?:about\s+)?(.+)",
         r"what\s+(?:did\s+)?(?:I|we)\s+(?:discuss|talk\s+about|mention)\s+(?:with\s+)?(.+)",
         r"what\s+(?:have\s+)?(?:I|we)\s+(?:discussed|talked\s+about|mentioned)\s+(?:with\s+)?(.+)",
         r"(?:show|list|find)\s+(?:my\s+)?notes?\s+(?:about|with|mentioning|involving)\s+(.+)",
         r"(?:any\s+)?notes?\s+(?:about|with|mentioning|involving)\s+(.+)",
+        r"what\s+notes?\s+(?:do\s+)?(?:I|we)\s+have\s+(?:about|on)\s+(.+)",
     ]
 
     # Activity start patterns - "starting X", "beginning X"
@@ -470,6 +473,10 @@ class IntentClassifier:
         if intent := self._try_reminder_query(text):
             return intent
 
+        # Note query - check before history_query (more specific patterns)
+        if intent := self._try_note_query(text):
+            return intent
+
         # History query
         if intent := self._try_history_query(text):
             return intent
@@ -519,9 +526,7 @@ class IntentClassifier:
             return intent
         if intent := self._try_activity_stop(text):
             return intent
-        # Note capture and query
-        if intent := self._try_note_query(text):
-            return intent
+        # Note capture (note_query already checked earlier)
         if intent := self._try_note_capture(text):
             return intent
 
