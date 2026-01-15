@@ -18,6 +18,7 @@ class ExtractedEntities:
     people: list[str] = field(default_factory=list)
     topics: list[str] = field(default_factory=list)
     locations: list[str] = field(default_factory=list)
+    action_items: list[str] = field(default_factory=list)
 
 
 class LanguageModel(Protocol):
@@ -33,13 +34,18 @@ EXTRACTION_PROMPT = """Extract entities from this note. Return ONLY valid JSON w
 {{
   "people": ["name1", "name2"],
   "topics": ["topic1", "topic2"],
-  "locations": ["location1"]
+  "locations": ["location1"],
+  "action_items": ["action1", "action2"]
 }}
 
 Rules:
 - people: Names of specific people mentioned (e.g., "John", "Sarah", "Dr. Smith")
 - topics: Main subjects or themes discussed (e.g., "Q1 budget", "project deadline")
 - locations: Specific places mentioned (e.g., "Starbucks", "downtown office", "conference room")
+- action_items: Tasks or actions the speaker needs to do, phrased as brief imperatives
+  - Look for phrases like "I should...", "I need to...", "I will...", "I have to...", "need to..."
+  - Convert to brief action format (e.g., "I should review the process" -> "review the process")
+  - Only include clear actionable items, not observations or facts
 - Return empty arrays [] if no entities found for a category
 - Do NOT include generic references like "the team" unless it's a named team
 
@@ -109,6 +115,7 @@ class EntityExtractor:
                     people=data.get("people", []),
                     topics=data.get("topics", []),
                     locations=data.get("locations", []),
+                    action_items=data.get("action_items", []),
                 )
 
         except json.JSONDecodeError as e:

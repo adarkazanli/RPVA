@@ -402,8 +402,57 @@ class MongoActivityDataSource:
         ]
 
 
+class MongoNoteDataSource:
+    """Adapter for digest generators to fetch note data.
+
+    Implements the NoteDataSource protocol expected by DailyDigestGenerator.
+    """
+
+    def __init__(self, repository: NoteRepository) -> None:
+        """Initialize with note repository.
+
+        Args:
+            repository: The NoteRepository to use.
+        """
+        self._repository = repository
+
+    def get_notes_for_date(
+        self, target_date: date, user_id: str
+    ) -> list[dict[str, Any]]:
+        """Get notes for a specific date as dicts.
+
+        Args:
+            target_date: The date to query.
+            user_id: User ID to filter by.
+
+        Returns:
+            List of note dicts with action_items.
+        """
+        start_of_day = datetime.combine(target_date, datetime.min.time(), tzinfo=UTC)
+        end_of_day = start_of_day + timedelta(days=1)
+
+        # Query notes for this date
+        cursor = self._repository._collection.find(
+            {
+                "user_id": user_id,
+                "timestamp": {"$gte": start_of_day, "$lt": end_of_day},
+            }
+        ).sort("timestamp", DESCENDING)
+
+        return [
+            {
+                "transcript": doc.get("transcript", ""),
+                "category": doc.get("category", ""),
+                "action_items": doc.get("action_items", []),
+                "timestamp": doc.get("timestamp"),
+            }
+            for doc in cursor
+        ]
+
+
 __all__ = [
+    "MongoActivityDataSource",
+    "MongoNoteDataSource",
     "NoteRepository",
     "TimeTrackingActivityRepository",
-    "MongoActivityDataSource",
 ]

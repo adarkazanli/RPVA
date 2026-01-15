@@ -31,6 +31,7 @@ class DailyDigest:
     total_minutes: int
     categories: list[CategoryBreakdown]
     activity_count: int
+    action_items: list[str]  # Action items extracted from notes
     summary: str  # Natural language summary for TTS
 
 
@@ -39,6 +40,14 @@ class ActivityDataSource(Protocol):
 
     def get_activities_for_date(self, target_date: date, user_id: str) -> list[dict[str, Any]]:
         """Get all activities for a specific date."""
+        ...
+
+
+class NoteDataSource(Protocol):
+    """Protocol for fetching note data."""
+
+    def get_notes_for_date(self, target_date: date, user_id: str) -> list[dict[str, Any]]:
+        """Get all notes for a specific date."""
         ...
 
 
@@ -51,15 +60,18 @@ class DailyDigestGenerator:
     def __init__(
         self,
         data_source: ActivityDataSource | None = None,
+        note_source: NoteDataSource | None = None,
         user_id: str = "default",
     ) -> None:
         """Initialize digest generator.
 
         Args:
             data_source: Source for activity data
+            note_source: Source for note data (to fetch action items)
             user_id: User ID for filtering activities
         """
         self._data_source = data_source
+        self._note_source = note_source
         self._user_id = user_id
 
     def generate(self, target_date: date | None = None) -> DailyDigest:
@@ -73,25 +85,37 @@ class DailyDigestGenerator:
         """
         target_date = target_date or date.today()
 
+        # Fetch action items from notes
+        action_items = self._fetch_action_items(target_date)
+
         if not self._data_source:
+            # No activity data, but might have action items from notes
+            summary = "I don't have any activities tracked for today yet."
+            if action_items:
+                summary += f" But you have {len(action_items)} action item{'s' if len(action_items) > 1 else ''} to address."
             return DailyDigest(
                 date=target_date,
                 total_minutes=0,
                 categories=[],
                 activity_count=0,
-                summary="I don't have any activities tracked for today yet.",
+                action_items=action_items,
+                summary=summary,
             )
 
         # Fetch activities
         activities = self._data_source.get_activities_for_date(target_date, self._user_id)
 
         if not activities:
+            summary = "I don't have any activities tracked for today yet."
+            if action_items:
+                summary += f" But you have {len(action_items)} action item{'s' if len(action_items) > 1 else ''} to address."
             return DailyDigest(
                 date=target_date,
                 total_minutes=0,
                 categories=[],
                 activity_count=0,
-                summary="I don't have any activities tracked for today yet.",
+                action_items=action_items,
+                summary=summary,
             )
 
         # Aggregate by category
@@ -130,21 +154,46 @@ class DailyDigestGenerator:
             )
 
         # Generate natural language summary
-        summary = self._generate_summary(target_date, breakdowns, total_minutes)
+        summary = self._generate_summary(target_date, breakdowns, total_minutes, action_items)
 
         return DailyDigest(
             date=target_date,
             total_minutes=total_minutes,
             categories=breakdowns,
             activity_count=activity_count,
+            action_items=action_items,
             summary=summary,
         )
+
+    def _fetch_action_items(self, target_date: date) -> list[str]:
+        """Fetch action items from notes for a given date.
+
+        Args:
+            target_date: Date to fetch action items for.
+
+        Returns:
+            List of action item strings.
+        """
+        if not self._note_source:
+            return []
+
+        try:
+            notes = self._note_source.get_notes_for_date(target_date, self._user_id)
+            action_items: list[str] = []
+            for note in notes:
+                items = note.get("action_items", [])
+                action_items.extend(items)
+            return action_items
+        except Exception as e:
+            logger.warning(f"Failed to fetch action items: {e}")
+            return []
 
     def _generate_summary(
         self,
         target_date: date,
         breakdowns: list[CategoryBreakdown],
         total_minutes: int,
+        action_items: list[str] | None = None,
     ) -> str:
         """Generate natural language summary.
 
@@ -152,6 +201,7 @@ class DailyDigestGenerator:
             target_date: Date being summarized
             breakdowns: Category breakdowns sorted by time
             total_minutes: Total tracked time
+            action_items: List of action items from notes
 
         Returns:
             Natural language summary for TTS
@@ -196,7 +246,25 @@ class DailyDigestGenerator:
         is_today = target_date == date.today()
         day_ref = "Today" if is_today else target_date.strftime("%A")
 
-        return f"{day_ref} you spent {breakdown_str}. Total: {total_str}."
+        summary = f"{day_ref} you spent {breakdown_str}. Total: {total_str}."
+
+        # Add action items if present
+        if action_items:
+            count = len(action_items)
+            if count == 1:
+                summary += f" You have one action item: {action_items[0]}."
+            elif count == 2:
+                summary += f" You have two action items: {action_items[0]} and {action_items[1]}."
+            else:
+                summary += f" You have {count} action items including {action_items[0]}."
+
+        return summary
 
 
-__all__ = ["DailyDigest", "DailyDigestGenerator", "CategoryBreakdown", "ActivityDataSource"]
+__all__ = [
+    "ActivityDataSource",
+    "CategoryBreakdown",
+    "DailyDigest",
+    "DailyDigestGenerator",
+    "NoteDataSource",
+]

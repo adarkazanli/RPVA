@@ -231,6 +231,7 @@ class NoteDTO:
     people: list[str] = field(default_factory=list)
     topics: list[str] = field(default_factory=list)
     locations: list[str] = field(default_factory=list)
+    action_items: list[str] = field(default_factory=list)
     activity_id: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -243,6 +244,7 @@ class NoteDTO:
             "people": self.people,
             "topics": self.topics,
             "locations": self.locations,
+            "action_items": self.action_items,
             "activity_id": self.activity_id,
         }
 
@@ -262,6 +264,7 @@ class NoteDTO:
             people=data.get("people", []),
             topics=data.get("topics", []),
             locations=data.get("locations", []),
+            action_items=data.get("action_items", []),
             activity_id=data.get("activity_id"),
         )
 

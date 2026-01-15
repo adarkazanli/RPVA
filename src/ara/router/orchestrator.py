@@ -221,6 +221,7 @@ class Orchestrator:
         self._note_repository: object | None = None
         self._activity_repository: object | None = None
         self._activity_data_source: object | None = None
+        self._note_data_source: object | None = None
         self._entity_extractor: object | None = None
 
         # Background check thread for timers/reminders
@@ -1650,7 +1651,7 @@ class Orchestrator:
             intent: Classified intent with content entity.
 
         Returns:
-            Response confirming note was captured.
+            Response confirming note was captured with action items.
         """
         from ..storage.models import NoteDTO
 
@@ -1662,11 +1663,12 @@ class Orchestrator:
         logger.info(f"Note captured: {content[:50]}...")
 
         # Extract entities and categorize if storage is available
+        action_items: list[str] = []
         if self._note_repository:
             # Auto-categorize the note
             category = categorize(content)
 
-            # Extract entities (people, topics, locations) if extractor available
+            # Extract entities (people, topics, locations, action_items) if extractor available
             people: list[str] = []
             topics: list[str] = []
             locations: list[str] = []
@@ -1677,6 +1679,7 @@ class Orchestrator:
                     people = entities.people
                     topics = entities.topics
                     locations = entities.locations
+                    action_items = entities.action_items
                 except Exception as e:
                     logger.warning(f"Entity extraction failed: {e}")
 
@@ -1689,14 +1692,45 @@ class Orchestrator:
                 people=people,
                 topics=topics,
                 locations=locations,
+                action_items=action_items,
             )
             note_id = self._note_repository.save(note)  # type: ignore
             logger.info(f"Note saved with id={note_id}, category={category.value}")
+            if action_items:
+                logger.info(f"Action items extracted: {action_items}")
 
-        # Provide concise confirmation
-        if self._user_name:
-            return f"Got it, {self._user_name}! Noted."
-        return "Got it! Noted."
+        # Build response with action items
+        return self._build_note_response(action_items)
+
+    def _build_note_response(self, action_items: list[str]) -> str:
+        """Build confirmation response for note capture.
+
+        Args:
+            action_items: List of extracted action items.
+
+        Returns:
+            Response string with action items mentioned.
+        """
+        name = self._user_name or ""
+        greeting = f"Got it{', ' + name if name else ''}!"
+
+        if not action_items:
+            return f"{greeting} Noted."
+
+        # Format action items for speech
+        if len(action_items) == 1:
+            return f"{greeting} Noted. I'll add '{action_items[0]}' to your action items for today."
+        elif len(action_items) == 2:
+            return (
+                f"{greeting} Noted. I'll add '{action_items[0]}' and "
+                f"'{action_items[1]}' to your action items."
+            )
+        else:
+            # Multiple items - summarize
+            return (
+                f"{greeting} Noted. I found {len(action_items)} action items "
+                f"including '{action_items[0]}'. All added to your list."
+            )
 
     def _handle_note_query(self, intent: Intent) -> str:
         """Handle note query intent ('what did I discuss with...').
@@ -1854,12 +1888,13 @@ class Orchestrator:
         """
         logger.info("Daily digest requested")
 
-        if not self._activity_data_source:
-            return "I don't have any activities tracked for today yet."
+        if not self._activity_data_source and not self._note_data_source:
+            return "I don't have any activities or notes tracked for today yet."
 
-        # Generate daily digest using the data source
+        # Generate daily digest using the data sources
         generator = DailyDigestGenerator(
             data_source=self._activity_data_source,  # type: ignore
+            note_source=self._note_data_source,  # type: ignore
             user_id="default",
         )
         digest = generator.generate()
@@ -1930,11 +1965,12 @@ class Orchestrator:
             llm: Optional LLM for entity extraction. Uses self._llm if not provided.
         """
         from ..notes.extractor import EntityExtractor
-        from ..storage.notes import MongoActivityDataSource
+        from ..storage.notes import MongoActivityDataSource, MongoNoteDataSource
 
         self._note_repository = note_repository
         self._activity_repository = activity_repository
         self._activity_data_source = MongoActivityDataSource(activity_repository)  # type: ignore
+        self._note_data_source = MongoNoteDataSource(note_repository)  # type: ignore
 
         # Set up entity extractor with LLM
         extractor_llm = llm or self._llm
