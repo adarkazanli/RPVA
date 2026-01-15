@@ -380,6 +380,12 @@ class IntentClassifier:
         r"how\s+(?:was|did)\s+(?:my\s+)?day\s+(?:go|look)",
         r"what\s+(?:did\s+)?(?:I|we)\s+(?:do|accomplish)\s+(?:this\s+)?(?:morning|afternoon|evening)",
         r"(?:give\s+me\s+)?(?:a\s+)?(?:recap|rundown)\s+(?:of\s+)?(?:my\s+)?(?:day|today)",
+        # Action item queries - route to daily digest which includes action items
+        r"(?:what\s+are\s+)?(?:my\s+)?action\s*items?\s*(?:for\s+)?(?:today)?",
+        r"(?:list|show|tell\s+me)\s+(?:my\s+)?action\s*items?",
+        r"what\s+(?:do\s+)?(?:I|we)\s+(?:need|have)\s+to\s+do\s*(?:today)?",
+        r"(?:what'?s?\s+)?(?:on\s+)?(?:my\s+)?(?:to\s*-?\s*do|todo)\s*(?:list)?",
+        r"(?:any\s+)?(?:pending\s+)?(?:tasks?|items?)\s+(?:for\s+)?(?:me\s+)?(?:today)?",
     ]
 
     # Weekly digest patterns - "how did I spend my time this week?"
