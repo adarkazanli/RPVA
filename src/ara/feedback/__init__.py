@@ -18,6 +18,7 @@ class FeedbackType(Enum):
     TIMER_ALERT = "timer_alert"
     REMINDER_ALERT = "reminder_alert"
     SUCCESS = "success"
+    INTERRUPT_ACKNOWLEDGED = "interrupt_ack"
 
 
 class AudioFeedback(Protocol):

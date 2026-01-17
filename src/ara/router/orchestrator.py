@@ -46,6 +46,7 @@ from ..feedback import FeedbackType
 from ..notes.categorizer import categorize
 from ..search import create_search_client
 from .intent import Intent, IntentClassifier, IntentType
+from .interrupt import InterruptManager
 from .query_router import (
     FALLBACK_CAVEAT,
     NOT_FOUND_MESSAGES,
@@ -264,6 +265,16 @@ class Orchestrator:
         search_client_type = type(self._search_client).__name__
         logger.info(f"Search client initialized: {search_client_type}")
 
+        # Initialize interrupt manager for speech interrupt handling
+        self._interrupt_manager: InterruptManager | None = None
+        if audio_capture and audio_playback and transcriber:
+            self._interrupt_manager = InterruptManager(
+                capture=audio_capture,
+                playback=audio_playback,
+                transcriber=transcriber,
+            )
+            logger.info("Interrupt manager initialized")
+
     @classmethod
     def from_config(
         cls,
@@ -429,10 +440,141 @@ class Orchestrator:
                 synthesis_result = self._synthesizer.synthesize(response_text)
             latencies["tts_ms"] = int((time.time() - tts_start) * 1000)
 
-            # Step 7: Play response
+            # Step 7: Play response with interrupt monitoring
             play_start = time.time()
-            self._playback.play(synthesis_result.audio, synthesis_result.sample_rate)
-            latencies["play_ms"] = int((time.time() - play_start) * 1000)
+
+            # Use interrupt manager for non-note responses
+            if self._interrupt_manager and not is_note_mode:
+                # Store original request for potential reprocessing
+                self._interrupt_manager.reset()
+                self._interrupt_manager.set_initial_request(transcript)
+
+                # Play with monitoring for user speech
+                interrupt_event = self._interrupt_manager.play_with_monitoring(
+                    synthesis_result.audio,
+                    synthesis_result.sample_rate,
+                )
+
+                if interrupt_event:
+                    # Interrupt detected - handle reprocessing
+                    logger.info("User interrupt detected, processing...")
+                    latencies["play_ms"] = int((time.time() - play_start) * 1000)
+
+                    # Play acknowledgment tone
+                    if self._feedback:
+                        self._feedback.play(FeedbackType.INTERRUPT_ACKNOWLEDGED)
+
+                    # Wait for user to finish speaking
+                    interrupt_text = self._interrupt_manager.wait_for_interrupt_complete()
+                    if interrupt_text:
+                        logger.info(f"Interrupt text: '{interrupt_text}'")
+
+                        # Check for special keywords (stop, wait, cancel, never mind)
+                        from .interrupt import is_special_keyword
+
+                        if is_special_keyword(interrupt_text.strip()):
+                            # Handle pause-and-wait for special keywords
+                            logger.info(f"Special keyword detected: '{interrupt_text}'")
+                            pause_keywords = {"stop", "wait", "hold on"}
+                            cancel_keywords = {"cancel", "never mind", "nevermind"}
+                            # Note: "actually" is handled in else branch as redirect
+
+                            text_lower = interrupt_text.lower().strip()
+
+                            if text_lower in pause_keywords:
+                                # Pause and wait for follow-up
+                                clarification = "OK, I've stopped. What would you like instead?"
+                                if self._synthesizer:
+                                    synth = self._synthesizer.synthesize(clarification)
+                                    self._playback.play(synth.audio, synth.sample_rate)
+
+                                # Wait for follow-up request (buffer preserved)
+                                follow_up = self._record_follow_up(timeout_ms=10000)
+                                if follow_up and self._transcriber:
+                                    follow_result = self._transcriber.transcribe(follow_up, 16000)
+                                    if follow_result.text.strip():
+                                        # Process follow-up as new request
+                                        new_intent = self._intent_classifier.classify(
+                                            follow_result.text.strip()
+                                        )
+                                        new_response = self._handle_intent(new_intent, interaction_id)
+                                        _log_interaction_timing("responded", new_response)
+
+                                        if self._synthesizer:
+                                            new_synth = self._synthesizer.synthesize(new_response)
+                                            self._playback.play(new_synth.audio, new_synth.sample_rate)
+
+                                        transcript = follow_result.text.strip()
+                                        response_text = new_response
+                                        intent = new_intent
+                                else:
+                                    transcript = interrupt_text
+                                    response_text = clarification
+                            elif text_lower in cancel_keywords:
+                                # Cancel and acknowledge
+                                response_text = "OK, cancelled."
+                                if self._synthesizer:
+                                    synth = self._synthesizer.synthesize(response_text)
+                                    self._playback.play(synth.audio, synth.sample_rate)
+                                transcript = interrupt_text
+                                self._interrupt_manager.reset()
+                            else:
+                                # Redirect keyword (actually) - process combined
+                                combined_request = self._interrupt_manager.get_combined_request()
+                                logger.info(f"Redirect combined: '{combined_request}'")
+                                _log_interaction_timing("captured", combined_request)
+
+                                combined_intent = self._intent_classifier.classify(combined_request)
+                                combined_response = self._handle_intent(
+                                    combined_intent, interaction_id
+                                )
+                                _log_interaction_timing("responded", combined_response)
+
+                                if self._synthesizer:
+                                    combined_synthesis = self._synthesizer.synthesize(combined_response)
+                                    self._playback.play(
+                                        combined_synthesis.audio, combined_synthesis.sample_rate
+                                    )
+
+                                transcript = combined_request
+                                response_text = combined_response
+                                intent = combined_intent
+                        else:
+                            # Normal interrupt - get combined request and reprocess
+                            combined_request = self._interrupt_manager.get_combined_request()
+                            logger.info(f"Combined request: '{combined_request}'")
+                            _log_interaction_timing("captured", combined_request)
+
+                            # Re-classify and handle
+                            combined_intent = self._intent_classifier.classify(combined_request)
+                            logger.info(f"Combined intent: {combined_intent.type.value}")
+
+                            combined_response = self._handle_intent(combined_intent, interaction_id)
+                            _log_interaction_timing("responded", combined_response)
+
+                            # Synthesize and play combined response
+                            combined_synthesis = self._synthesizer.synthesize(combined_response)
+                            self._playback.play(
+                                combined_synthesis.audio, combined_synthesis.sample_rate
+                            )
+
+                            # Update for logging
+                            transcript = combined_request
+                            response_text = combined_response
+                            intent = combined_intent
+                else:
+                    latencies["play_ms"] = int((time.time() - play_start) * 1000)
+
+                    # Start continuation window for potential follow-up speech
+                    continuation_result = self._handle_continuation_window(
+                        interaction_id
+                    )
+                    if continuation_result:
+                        transcript, response_text, intent = continuation_result
+            else:
+                # Direct playback for note mode or when interrupt manager unavailable
+                self._playback.play(synthesis_result.audio, synthesis_result.sample_rate)
+                latencies["play_ms"] = int((time.time() - play_start) * 1000)
 
             # Step 8: Check for follow-up if response ended with a question (skip for note mode)
             if not is_note_mode and response_text.strip().endswith("?"):
@@ -2585,6 +2727,104 @@ class Orchestrator:
 
         # Not note-taking mode, return initial recording
         return initial_audio, False
+
+    def _handle_continuation_window(
+        self,
+        interaction_id: "uuid.UUID",
+    ) -> tuple[str, str, "Intent"] | None:
+        """Handle the 5-second continuation window after response playback.
+
+        Listens for user speech within the continuation window. If detected,
+        combines with original request and reprocesses.
+
+        Args:
+            interaction_id: Current interaction UUID
+
+        Returns:
+            Tuple of (combined_transcript, response_text, intent) if continuation
+            detected, None otherwise
+        """
+        if not self._interrupt_manager or not self._capture or not self._transcriber:
+            return None
+
+        continuation_speech_event = threading.Event()
+        continuation_audio: list[bytes] = []
+
+        def on_window_expire() -> None:
+            """Called when continuation window expires without speech."""
+            logger.debug("Continuation window expired without speech")
+            self._interrupt_manager.reset()
+
+        # Start the continuation window
+        self._interrupt_manager.start_continuation_window(on_expire=on_window_expire)
+        logger.info("Continuation window started (5s)")
+
+        # Monitor for speech within the window
+        self._capture.start()
+        try:
+            window_start = time.time()
+            while self._interrupt_manager._continuation_window.is_active:
+                # Check timeout (should be handled by window, but safety check)
+                if time.time() - window_start > 5.5:
+                    break
+
+                # Try to get audio chunk with short timeout
+                try:
+                    for chunk in self._capture.stream():
+                        from .interrupt import calculate_energy
+
+                        energy = calculate_energy(chunk.data)
+
+                        if energy > 750:  # Same threshold as interrupt
+                            # Speech detected - cancel window and process
+                            self._interrupt_manager.cancel_continuation_window()
+                            continuation_audio.append(chunk.data)
+                            continuation_speech_event.set()
+                            logger.info("Speech detected in continuation window")
+                            break
+
+                        # Short polling to allow window to expire
+                        if not self._interrupt_manager._continuation_window.is_active:
+                            break
+                except Exception:
+                    pass
+
+                if continuation_speech_event.is_set():
+                    break
+
+                time.sleep(0.05)
+
+        finally:
+            self._capture.stop()
+
+        # If speech was detected, record the rest and process
+        if continuation_speech_event.is_set():
+            # Record remaining speech with silence detection
+            continuation_text = self._interrupt_manager.wait_for_interrupt_complete()
+
+            if continuation_text:
+                # Get combined request
+                combined_request = self._interrupt_manager.get_combined_request()
+                logger.info(f"Continuation combined: '{combined_request}'")
+                _log_interaction_timing("captured", combined_request)
+
+                # Re-classify and handle
+                combined_intent = self._intent_classifier.classify(combined_request)
+                logger.info(f"Continuation intent: {combined_intent.type.value}")
+
+                combined_response = self._handle_intent(combined_intent, interaction_id)
+                _log_interaction_timing("responded", combined_response)
+
+                # Synthesize and play combined response
+                if self._synthesizer and self._playback:
+                    combined_synthesis = self._synthesizer.synthesize(combined_response)
+                    self._playback.play(
+                        combined_synthesis.audio, combined_synthesis.sample_rate
+                    )
+
+                return combined_request, combined_response, combined_intent
+
+        return None
 
     def _record_follow_up(self, timeout_ms: int = 5000) -> bytes:
         """Record follow-up speech for a limited time.

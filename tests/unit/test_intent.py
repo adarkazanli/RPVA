@@ -159,6 +159,27 @@ class TestIntentClassifier:
         assert intent.type == IntentType.SYSTEM_COMMAND
         assert intent.entities.get("command") == "status"
 
+    # Note capture intents
+    def test_classify_capture_as_action_item(self, classifier: IntentClassifier) -> None:
+        """Test classifying 'capture it as an action item'."""
+        intent = classifier.classify("capture it as an action item")
+        assert intent.type == IntentType.NOTE_CAPTURE
+        assert intent.confidence >= 0.85
+
+    def test_classify_action_item_variations(self, classifier: IntentClassifier) -> None:
+        """Test various capture action item phrasings."""
+        test_cases = [
+            "capture it as an action item",
+            "add it as action item",
+            "save this as an action item",
+            "record it as an action item",
+            "log that as action item",
+            "capture as action item",
+        ]
+        for text in test_cases:
+            intent = classifier.classify(text)
+            assert intent.type == IntentType.NOTE_CAPTURE, f"Failed for: {text}"
+
     # Edge cases
     def test_classify_empty_string(self, classifier: IntentClassifier) -> None:
         """Test classifying empty string."""

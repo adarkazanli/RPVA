@@ -27,6 +27,7 @@ TONE_FREQUENCIES: dict[FeedbackType, int] = {
     FeedbackType.TIMER_ALERT: 1000,  # High, attention-grabbing
     FeedbackType.REMINDER_ALERT: 800,  # Slightly lower than timer
     FeedbackType.SUCCESS: 523,  # C5 - positive
+    FeedbackType.INTERRUPT_ACKNOWLEDGED: 200,  # Low "boop" - distinct from wake beep
 }
 
 # Default durations for generated tones (ms)
@@ -38,6 +39,7 @@ TONE_DURATIONS: dict[FeedbackType, int] = {
     FeedbackType.TIMER_ALERT: 500,
     FeedbackType.REMINDER_ALERT: 400,
     FeedbackType.SUCCESS: 200,
+    FeedbackType.INTERRUPT_ACKNOWLEDGED: 100,  # Quick, doesn't delay response
 }
 
 

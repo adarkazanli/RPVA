@@ -343,6 +343,7 @@ class IntentClassifier:
         r"(?:make\s+a\s+)?note[:\s]+(?!of\s+that)(.+)",
         r"(?:i\s+)?(?:just\s+)?(?:had\s+a\s+)?(?:meeting|discussion|conversation|talk)\s+(?:with\s+)?(.+)",
         r"(?:i\s+)?(?:just\s+)?(?:talked|spoke|met)\s+(?:to|with)\s+(.+)",
+        r"(?:capture|add|save|record|log)\s+(?:it|this|that)?\s*(?:as\s+)?(?:an?\s+)?action\s+items?",
     ]
 
     # Note query patterns - "what did I discuss with John?"
@@ -397,7 +398,8 @@ class IntentClassifier:
         r"what\s+(?:do\s+)?(?:I|we)\s+(?:need|have)\s+to\s+do\s*(?:for\s+|from\s+)?(today|yesterday)?",
         r"(?:what'?s?\s+)?(?:on\s+)?(?:my\s+)?(?:to\s*-?\s*do|todo)\s*(?:list)?\s*(?:for\s+|from\s+)?(today|yesterday)?",
         r"(?:any\s+)?(?:pending\s+)?(?:tasks?|items?)\s+(?:for\s+|from\s+)?(?:me\s+)?(today|yesterday)?",
-        r"(?:yesterday'?s?\s+)?action\s*items?",
+        # Standalone query: "action items", "yesterday's action items" - excludes "capture as action item"
+        r"^(?:my\s+|yesterday'?s?\s+)?action\s*items?\s*\??$",
     ]
 
     # Email action items patterns - "email me my action items"
@@ -1142,6 +1144,13 @@ class IntentClassifier:
         Examples: "what are my action items?", "what do I need to do today?",
                   "what were my action items from yesterday?"
         """
+        # Exclude capture phrases - these should be NOTE_CAPTURE instead
+        capture_verbs = re.compile(
+            r"\b(capture|add|save|record|log)\b.*\baction\s*items?\b", re.IGNORECASE
+        )
+        if capture_verbs.search(text):
+            return None
+
         for pattern in self._action_items:
             match = pattern.search(text)
             if match:
