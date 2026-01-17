@@ -317,7 +317,10 @@ class InterruptManager:
                     with self._interrupt_lock:
                         self._interrupt_audio += chunk.data
         finally:
-            self._capture.stop()
+            # Only stop capture if no interrupt was detected
+            # If interrupt occurred, wait_for_interrupt_complete will handle capture
+            if not self._interrupt_event.is_set():
+                self._capture.stop()
 
     def play_with_monitoring(
         self,
@@ -384,7 +387,12 @@ class InterruptManager:
         with self._interrupt_lock:
             audio_buffer.append(self._interrupt_audio)
 
-        self._capture.start()
+        # Only start capture if not already active (monitor thread may have left it running)
+        capture_was_active = getattr(self._capture, 'is_active', False)
+        if not capture_was_active:
+            # Small delay to avoid PyAudio segfault from rapid stop/start
+            time.sleep(0.1)
+            self._capture.start()
         try:
             for chunk in self._capture.stream():
                 energy = calculate_energy(chunk.data)
