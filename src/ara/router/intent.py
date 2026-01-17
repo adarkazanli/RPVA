@@ -163,6 +163,8 @@ class IntentClassifier:
         r"with\s+internet[,\s]+(.+)",
         r"using\s+internet[,\s]+(.+)",
         r"google\s+(.+)",
+        # Research patterns
+        r"(?:do\s+)?(?:some\s+)?(?:online\s+)?research\s+(?:on|about|for)?\s*(.+)",
         # News patterns - capture full query for context
         r"(?:what(?:'s|'s|\s+is)\s+)?(?:the\s+)?(?:latest|top|recent|current|breaking)\s+(?:news|headlines?)(?:\s+(?:about|on|in|from)\s+(.+))?",
         r"(?:what(?:'s|'s|\s+is)\s+)?(?:in\s+)?(?:the\s+)?news(?:\s+(?:today|right\s+now))?(?:\s+(?:about|on|in|from)\s+(.+))?",
@@ -770,18 +772,24 @@ class IntentClassifier:
         """Try to match web search patterns."""
         text_lower = text.lower()
 
+        # Explicit web search triggers bypass personal data check
+        explicit_web_triggers = ["research", "search", "google", "look up", "check online"]
+        has_explicit_trigger = any(trigger in text_lower for trigger in explicit_web_triggers)
+
         # Skip web search if query is about personal data (contains "me", "my", "I")
-        personal_indicators = [
-            r"\bme\b",
-            r"\bmy\b",
-            r"\bi\b",
-            r"\bmyself\b",
-            r"\bi've\b",
-            r"\bi'm\b",
-        ]
-        for indicator in personal_indicators:
-            if re.search(indicator, text_lower):
-                return None  # Let personal data handler catch this
+        # UNLESS user explicitly requested web search/research
+        if not has_explicit_trigger:
+            personal_indicators = [
+                r"\bme\b",
+                r"\bmy\b",
+                r"\bi\b",
+                r"\bmyself\b",
+                r"\bi've\b",
+                r"\bi'm\b",
+            ]
+            for indicator in personal_indicators:
+                if re.search(indicator, text_lower):
+                    return None  # Let personal data handler catch this
 
         for pattern in self._web_search:
             match = pattern.search(text)
