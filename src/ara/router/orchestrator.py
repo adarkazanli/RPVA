@@ -631,9 +631,13 @@ class Orchestrator:
                         logger.info(f"Follow-up: '{follow_up_text}'")
                         _log_interaction_timing("captured", follow_up_text)
 
-                        # Classify and handle follow-up
+                        # Classify and handle follow-up with thinking indicator
                         follow_up_intent = self._intent_classifier.classify(follow_up_text)
-                        follow_up_response = self._handle_intent(follow_up_intent, interaction_id)
+                        self._start_thinking_indicator()
+                        try:
+                            follow_up_response = self._handle_intent(follow_up_intent, interaction_id)
+                        finally:
+                            self._stop_thinking_indicator()
                         _log_interaction_timing("responded", follow_up_response)
 
                         # Update last response for follow-up context
@@ -645,6 +649,10 @@ class Orchestrator:
                         self._playback.play(
                             follow_up_synthesis.audio, follow_up_synthesis.sample_rate
                         )
+
+                        # Play beep to signal end of follow-up response
+                        if self._feedback:
+                            self._feedback.play(FeedbackType.RESPONSE_COMPLETE, blocking=True)
 
                         # Update transcript/response for logging
                         transcript = f"{transcript} | {follow_up_text}"
@@ -2951,7 +2959,12 @@ class Orchestrator:
                 combined_intent = self._intent_classifier.classify(combined_request)
                 logger.info(f"Continuation intent: {combined_intent.type.value}")
 
-                combined_response = self._handle_intent(combined_intent, interaction_id)
+                # Play thinking indicator while processing
+                self._start_thinking_indicator()
+                try:
+                    combined_response = self._handle_intent(combined_intent, interaction_id)
+                finally:
+                    self._stop_thinking_indicator()
                 _log_interaction_timing("responded", combined_response)
 
                 # Update last response for follow-up context
@@ -2964,6 +2977,10 @@ class Orchestrator:
                     self._playback.play(
                         combined_synthesis.audio, combined_synthesis.sample_rate
                     )
+
+                    # Play beep to signal end of continuation response
+                    if self._feedback:
+                        self._feedback.play(FeedbackType.RESPONSE_COMPLETE, blocking=True)
 
                 return combined_request, combined_response, combined_intent
 
