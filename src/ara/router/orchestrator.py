@@ -591,9 +591,13 @@ class Orchestrator:
                             response_text = combined_response
                             intent = combined_intent
                         else:
-                            # Not a recognized interrupt keyword - ignore (likely noise)
+                            # Not a recognized interrupt keyword - ignore (likely noise/TTS echo)
                             logger.info(f"Ignoring non-keyword interrupt: '{interrupt_text}'")
                             self._interrupt_manager.reset()
+
+                            # Resume playback from beginning (we don't track position)
+                            logger.info("Resuming playback after ignored interrupt")
+                            self._playback.play(synthesis_result.audio, synthesis_result.sample_rate)
                 else:
                     latencies["play_ms"] = int((time.time() - play_start) * 1000)
 
@@ -1600,14 +1604,27 @@ class Orchestrator:
             if result.results:
                 summaries = []
                 sources = []
+                has_structured_data = False
                 for r in result.results[:3]:
                     content = r.get("content", "")
                     title = r.get("title", "")
                     if content:
+                        # Check if content looks like JSON/structured data
+                        content_stripped = content.strip()
+                        if content_stripped.startswith(("{", "[", "'")):
+                            has_structured_data = True
                         # Take first ~80 chars of each result
                         summaries.append(content[:80])
                     if title:
                         sources.append(title)
+
+                # If content is structured data, use LLM to summarize
+                if has_structured_data and self._llm:
+                    logger.info("Search results contain structured data, using LLM to summarize")
+                    raw_content = "\n".join([r.get("content", "")[:300] for r in result.results[:3]])
+                    llm_prompt = f"Based on this search data, answer briefly: {query}\n\nData: {raw_content}"
+                    llm_response = self._llm.generate(llm_prompt)
+                    return f"{greeting}{llm_response.text.strip()}"
 
                 if summaries:
                     combined = " ".join(summaries)
