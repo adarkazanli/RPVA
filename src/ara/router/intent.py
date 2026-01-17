@@ -374,6 +374,9 @@ class IntentClassifier:
         r"(?:i'?m\s+)?\b(?:done|finished|completed)\b\s+(?:with\s+)?(?:my\s+)?(?:the\s+)?(.+)",
         r"(?:just\s+)?\b(?:finished|completed|ended|stopped)\b\s+(?:my\s+)?(?:the\s+)?(.+)",
         r"(?:i'?m\s+)?\b(?:done|finished)\b\s*$",  # Just "done" or "finished"
+        # "end the activity" patterns (STT often mishears "end" as "and")
+        r"\b(?:end|and)\s+(?:the\s+)?(?:activity|activities)\b(?:\s+(?:of\s+)?(.+))?",
+        r"\bend\s+(?:my\s+)?(?:the\s+)?(.+?)(?:\s+activity)?$",
         # Arrival patterns - end travel/commute activities
         r"(?:i\s+)?(?:just\s+)?\barrived\b\s+(?:back\s+)?(?:at|to|in)?\s*(?:my\s+)?(?:the\s+)?(.+)",
         r"(?:i'?m\s+)?(?:back|here)\b\s+(?:at|to|in)\s*(?:my\s+)?(?:the\s+)?(.+)",  # Require preposition to avoid "shipping back"
