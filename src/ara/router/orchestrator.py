@@ -233,9 +233,9 @@ class Orchestrator:
         self._silence_timeout_ms = 2500  # Stop recording after 2.5s silence (allow natural pauses)
         self._max_recording_ms = 10000  # Max 10s recording
 
-        # Interrupt monitoring - disabled by default to avoid TTS echo false positives
-        # User can still speak during continuation window after response finishes
-        self._enable_interrupt_monitoring = False
+        # Interrupt monitoring - enabled with 1s delay and high threshold to avoid TTS echo
+        # Only "stop" and "wait" keywords are recognized during playback
+        self._enable_interrupt_monitoring = True
 
         # Recording configuration - note-taking mode (patient, no interruption)
         self._note_silence_timeout_ms = 10000  # 10s silence for notes (user can pause to think)

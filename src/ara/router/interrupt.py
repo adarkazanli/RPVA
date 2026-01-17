@@ -21,8 +21,9 @@ if TYPE_CHECKING:
 # Constants
 # Balance between avoiding TTS echo (too low) and detecting "stop"/"wait" (too high)
 # 750 = TTS echo triggers false positives, 2500 = user voice not detected
-# 1500 still had echo issues, raised to 1750
-INTERRUPT_THRESHOLD: float = 1750.0  # RMS energy threshold to trigger interrupt
+# 1750 still had echo issues with sensitive mic, raised to 2000
+INTERRUPT_THRESHOLD: float = 2000.0  # RMS energy threshold to trigger interrupt
+INTERRUPT_DELAY_MS: int = 1000  # Skip first 1s of playback to avoid initial TTS burst
 SILENCE_TIMEOUT_MS: int = 2500  # Milliseconds of silence before reprocessing
 CONTINUATION_WINDOW_S: float = 5.0  # Seconds after response to accept continuations
 TTS_STOP_TIMEOUT_MS: int = 500  # Maximum time to stop TTS playback
@@ -302,6 +303,13 @@ class InterruptManager:
 
     def _monitor_for_interrupt(self) -> None:
         """Background thread to detect speech during playback."""
+        # Delay before starting to monitor - skip initial TTS burst
+        # This avoids false positives from echo during the first second
+        time.sleep(INTERRUPT_DELAY_MS / 1000.0)
+
+        if not self._monitoring:
+            return  # Playback finished during delay
+
         # Small delay to avoid PyAudio segfault from rapid operations
         time.sleep(0.05)
         self._capture.start()
