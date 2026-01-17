@@ -233,6 +233,10 @@ class Orchestrator:
         self._silence_timeout_ms = 2500  # Stop recording after 2.5s silence (allow natural pauses)
         self._max_recording_ms = 10000  # Max 10s recording
 
+        # Interrupt monitoring - disabled by default to avoid TTS echo false positives
+        # User can still speak during continuation window after response finishes
+        self._enable_interrupt_monitoring = False
+
         # Recording configuration - note-taking mode (patient, no interruption)
         self._note_silence_timeout_ms = 10000  # 10s silence for notes (user can pause to think)
         self._note_max_recording_ms = 180000  # 3 minute max for notes
@@ -470,8 +474,8 @@ class Orchestrator:
             # Step 7: Play response with interrupt monitoring
             play_start = time.time()
 
-            # Use interrupt manager for non-note responses
-            if self._interrupt_manager and not is_note_mode:
+            # Use interrupt manager for non-note responses (if enabled)
+            if self._interrupt_manager and not is_note_mode and self._enable_interrupt_monitoring:
                 # Store original request for potential reprocessing
                 self._interrupt_manager.reset()
                 self._interrupt_manager.set_initial_request(transcript)
@@ -612,9 +616,20 @@ class Orchestrator:
                     if continuation_result:
                         transcript, response_text, intent = continuation_result
             else:
-                # Direct playback for note mode or when interrupt manager unavailable
+                # Direct playback for note mode, interrupt monitoring disabled, or no interrupt manager
                 self._playback.play(synthesis_result.audio, synthesis_result.sample_rate)
                 latencies["play_ms"] = int((time.time() - play_start) * 1000)
+
+                # For non-note mode, still do continuation window (allows follow-ups without interrupt echo issues)
+                if not is_note_mode and self._interrupt_manager:
+                    # Play beep to signal ready for input
+                    if self._feedback:
+                        self._feedback.play(FeedbackType.RESPONSE_COMPLETE, blocking=True)
+
+                    # Start continuation window for potential follow-up speech
+                    continuation_result = self._handle_continuation_window(interaction_id)
+                    if continuation_result:
+                        transcript, response_text, intent = continuation_result
 
             # Step 8: Check for follow-up if response ended with a question (skip for note mode)
             if not is_note_mode and response_text.strip().endswith("?"):
