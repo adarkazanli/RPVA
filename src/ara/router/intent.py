@@ -365,15 +365,16 @@ class IntentClassifier:
     ]
 
     # Activity stop patterns - "done with X", "finished X", "arrived at X"
+    # Note: Use \b word boundaries to prevent matching inside other words (e.g., "there" matching "here")
     ACTIVITY_STOP_PATTERNS = [
-        r"(?:i'?m\s+)?(?:done|finished|completed)\s+(?:with\s+)?(?:my\s+)?(?:the\s+)?(.+)",
-        r"(?:just\s+)?(?:finished|completed|ended|stopped)\s+(?:my\s+)?(?:the\s+)?(.+)",
-        r"(?:i'?m\s+)?(?:done|finished)\s*$",  # Just "done" or "finished"
+        r"(?:i'?m\s+)?\b(?:done|finished|completed)\b\s+(?:with\s+)?(?:my\s+)?(?:the\s+)?(.+)",
+        r"(?:just\s+)?\b(?:finished|completed|ended|stopped)\b\s+(?:my\s+)?(?:the\s+)?(.+)",
+        r"(?:i'?m\s+)?\b(?:done|finished)\b\s*$",  # Just "done" or "finished"
         # Arrival patterns - end travel/commute activities
-        r"(?:i\s+)?(?:just\s+)?arrived\s+(?:back\s+)?(?:at|to|in)?\s*(?:my\s+)?(?:the\s+)?(.+)",
-        r"(?:i'?m\s+)?(?:back|here)\s+(?:at|to|in)?\s*(?:my\s+)?(?:the\s+)?(.+)",
-        r"(?:i\s+)?(?:just\s+)?got\s+(?:back|here|home|in)\s*(?:to\s+)?(?:my\s+)?(?:the\s+)?(.*)$",
-        r"(?:i'?m\s+)?(?:back|home)\s*$",  # Just "I'm back" or "I'm home"
+        r"(?:i\s+)?(?:just\s+)?\barrived\b\s+(?:back\s+)?(?:at|to|in)?\s*(?:my\s+)?(?:the\s+)?(.+)",
+        r"(?:i'?m\s+)?\b(?:back|here)\b\s+(?:at|to|in)?\s*(?:my\s+)?(?:the\s+)?(.+)",
+        r"(?:i\s+)?(?:just\s+)?\bgot\b\s+(?:back|here|home|in)\s*(?:to\s+)?(?:my\s+)?(?:the\s+)?(.*)$",
+        r"(?:i'?m\s+)?\b(?:back|home)\b\s*$",  # Just "I'm back" or "I'm home"
     ]
 
     # Daily digest patterns - "how did I spend my time today?"
