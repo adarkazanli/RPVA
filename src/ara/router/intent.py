@@ -376,7 +376,7 @@ class IntentClassifier:
         r"(?:i'?m\s+)?\b(?:done|finished)\b\s*$",  # Just "done" or "finished"
         # Arrival patterns - end travel/commute activities
         r"(?:i\s+)?(?:just\s+)?\barrived\b\s+(?:back\s+)?(?:at|to|in)?\s*(?:my\s+)?(?:the\s+)?(.+)",
-        r"(?:i'?m\s+)?\b(?:back|here)\b\s+(?:at|to|in)?\s*(?:my\s+)?(?:the\s+)?(.+)",
+        r"(?:i'?m\s+)?(?:back|here)\b\s+(?:at|to|in)\s*(?:my\s+)?(?:the\s+)?(.+)",  # Require preposition to avoid "shipping back"
         r"(?:i\s+)?(?:just\s+)?\bgot\b\s+(?:back|here|home|in)\s*(?:to\s+)?(?:my\s+)?(?:the\s+)?(.*)$",
         r"(?:i'?m\s+)?\b(?:back|home)\b\s*$",  # Just "I'm back" or "I'm home"
     ]
