@@ -18,6 +18,9 @@ class FeedbackType(Enum):
     TIMER_ALERT = "timer_alert"
     REMINDER_ALERT = "reminder_alert"
     SUCCESS = "success"
+    INTERRUPT_ACKNOWLEDGED = "interrupt_ack"
+    THINKING = "thinking"  # Looping chime while waiting for LLM
+    RESPONSE_COMPLETE = "response_complete"  # Long beep at end of interaction
 
 
 class AudioFeedback(Protocol):
@@ -27,11 +30,12 @@ class AudioFeedback(Protocol):
     to provide auditory feedback to users.
     """
 
-    def play(self, feedback_type: FeedbackType) -> None:
+    def play(self, feedback_type: FeedbackType, *, blocking: bool = False) -> None:
         """Play feedback sound for the given event type.
 
         Args:
             feedback_type: The type of event to provide feedback for
+            blocking: If True, wait for playback to complete before returning
         """
         ...
 

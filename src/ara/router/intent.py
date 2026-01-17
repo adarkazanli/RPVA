@@ -163,6 +163,8 @@ class IntentClassifier:
         r"with\s+internet[,\s]+(.+)",
         r"using\s+internet[,\s]+(.+)",
         r"google\s+(.+)",
+        # Research patterns
+        r"(?:do\s+)?(?:some\s+)?(?:online\s+)?research\s+(?:on|about|for)?\s*(.+)",
         # News patterns - capture full query for context
         r"(?:what(?:'s|'s|\s+is)\s+)?(?:the\s+)?(?:latest|top|recent|current|breaking)\s+(?:news|headlines?)(?:\s+(?:about|on|in|from)\s+(.+))?",
         r"(?:what(?:'s|'s|\s+is)\s+)?(?:in\s+)?(?:the\s+)?news(?:\s+(?:today|right\s+now))?(?:\s+(?:about|on|in|from)\s+(.+))?",
@@ -310,6 +312,8 @@ class IntentClassifier:
         r"what\s+(?:was|is)\s+the\s+duration\s+(?:of\s+)?(?:my\s+)?(.+)",
         r"(?:tell\s+me\s+)?how\s+long\s+(?:I\s+)?(?:spent|took)\s+(?:on|with|doing|in)\s+(?:the\s+)?(.+)",
         r"duration\s+(?:of\s+)?(?:my\s+)?(?:last\s+)?(.+)",
+        # "how long did the last activity last", "how long did my workout take"
+        r"how\s+long\s+did\s+(?:the\s+)?(?:last\s+)?(.+?)(?:\s+last|\s+take)?\??$",
     ]
 
     # Activity search patterns - "what was I doing around 10 AM?"
@@ -343,6 +347,7 @@ class IntentClassifier:
         r"(?:make\s+a\s+)?note[:\s]+(?!of\s+that)(.+)",
         r"(?:i\s+)?(?:just\s+)?(?:had\s+a\s+)?(?:meeting|discussion|conversation|talk)\s+(?:with\s+)?(.+)",
         r"(?:i\s+)?(?:just\s+)?(?:talked|spoke|met)\s+(?:to|with)\s+(.+)",
+        r"(?:capture|add|save|record|log)\s+(?:it|this|that)?\s*(?:as\s+)?(?:an?\s+)?action\s+items?",
     ]
 
     # Note query patterns - "what did I discuss with John?"
@@ -364,15 +369,16 @@ class IntentClassifier:
     ]
 
     # Activity stop patterns - "done with X", "finished X", "arrived at X"
+    # Note: Use \b word boundaries to prevent matching inside other words (e.g., "there" matching "here")
     ACTIVITY_STOP_PATTERNS = [
-        r"(?:i'?m\s+)?(?:done|finished|completed)\s+(?:with\s+)?(?:my\s+)?(?:the\s+)?(.+)",
-        r"(?:just\s+)?(?:finished|completed|ended|stopped)\s+(?:my\s+)?(?:the\s+)?(.+)",
-        r"(?:i'?m\s+)?(?:done|finished)\s*$",  # Just "done" or "finished"
+        r"(?:i'?m\s+)?\b(?:done|finished|completed)\b\s+(?:with\s+)?(?:my\s+)?(?:the\s+)?(.+)",
+        r"(?:just\s+)?\b(?:finished|completed|ended|stopped)\b\s+(?:my\s+)?(?:the\s+)?(.+)",
+        r"(?:i'?m\s+)?\b(?:done|finished)\b\s*$",  # Just "done" or "finished"
         # Arrival patterns - end travel/commute activities
-        r"(?:i\s+)?(?:just\s+)?arrived\s+(?:back\s+)?(?:at|to|in)?\s*(?:my\s+)?(?:the\s+)?(.+)",
-        r"(?:i'?m\s+)?(?:back|here)\s+(?:at|to|in)?\s*(?:my\s+)?(?:the\s+)?(.+)",
-        r"(?:i\s+)?(?:just\s+)?got\s+(?:back|here|home|in)\s*(?:to\s+)?(?:my\s+)?(?:the\s+)?(.*)$",
-        r"(?:i'?m\s+)?(?:back|home)\s*$",  # Just "I'm back" or "I'm home"
+        r"(?:i\s+)?(?:just\s+)?\barrived\b\s+(?:back\s+)?(?:at|to|in)?\s*(?:my\s+)?(?:the\s+)?(.+)",
+        r"(?:i'?m\s+)?(?:back|here)\b\s+(?:at|to|in)\s*(?:my\s+)?(?:the\s+)?(.+)",  # Require preposition to avoid "shipping back"
+        r"(?:i\s+)?(?:just\s+)?\bgot\b\s+(?:back|here|home|in)\s*(?:to\s+)?(?:my\s+)?(?:the\s+)?(.*)$",
+        r"(?:i'?m\s+)?\b(?:back|home)\b\s*$",  # Just "I'm back" or "I'm home"
     ]
 
     # Daily digest patterns - "how did I spend my time today?"
@@ -397,7 +403,8 @@ class IntentClassifier:
         r"what\s+(?:do\s+)?(?:I|we)\s+(?:need|have)\s+to\s+do\s*(?:for\s+|from\s+)?(today|yesterday)?",
         r"(?:what'?s?\s+)?(?:on\s+)?(?:my\s+)?(?:to\s*-?\s*do|todo)\s*(?:list)?\s*(?:for\s+|from\s+)?(today|yesterday)?",
         r"(?:any\s+)?(?:pending\s+)?(?:tasks?|items?)\s+(?:for\s+|from\s+)?(?:me\s+)?(today|yesterday)?",
-        r"(?:yesterday'?s?\s+)?action\s*items?",
+        # Standalone query: "action items", "yesterday's action items" - excludes "capture as action item"
+        r"^(?:my\s+|yesterday'?s?\s+)?action\s*items?\s*\??$",
     ]
 
     # Email action items patterns - "email me my action items"
@@ -765,18 +772,24 @@ class IntentClassifier:
         """Try to match web search patterns."""
         text_lower = text.lower()
 
+        # Explicit web search triggers bypass personal data check
+        explicit_web_triggers = ["research", "search", "google", "look up", "check online"]
+        has_explicit_trigger = any(trigger in text_lower for trigger in explicit_web_triggers)
+
         # Skip web search if query is about personal data (contains "me", "my", "I")
-        personal_indicators = [
-            r"\bme\b",
-            r"\bmy\b",
-            r"\bi\b",
-            r"\bmyself\b",
-            r"\bi've\b",
-            r"\bi'm\b",
-        ]
-        for indicator in personal_indicators:
-            if re.search(indicator, text_lower):
-                return None  # Let personal data handler catch this
+        # UNLESS user explicitly requested web search/research
+        if not has_explicit_trigger:
+            personal_indicators = [
+                r"\bme\b",
+                r"\bmy\b",
+                r"\bi\b",
+                r"\bmyself\b",
+                r"\bi've\b",
+                r"\bi'm\b",
+            ]
+            for indicator in personal_indicators:
+                if re.search(indicator, text_lower):
+                    return None  # Let personal data handler catch this
 
         for pattern in self._web_search:
             match = pattern.search(text)
@@ -1142,6 +1155,13 @@ class IntentClassifier:
         Examples: "what are my action items?", "what do I need to do today?",
                   "what were my action items from yesterday?"
         """
+        # Exclude capture phrases - these should be NOTE_CAPTURE instead
+        capture_verbs = re.compile(
+            r"\b(capture|add|save|record|log)\b.*\baction\s*items?\b", re.IGNORECASE
+        )
+        if capture_verbs.search(text):
+            return None
+
         for pattern in self._action_items:
             match = pattern.search(text)
             if match:

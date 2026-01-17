@@ -13,6 +13,10 @@ Auto-generated from all feature plans. Last updated: 2026-01-12
 - MongoDB (existing) for personal data queries (006-smart-query-routing)
 - Python 3.11+ + Existing codebase (ara.router, ara.storage, ara.llm), Ollama for entity extraction (005-time-tracking-notes)
 - MongoDB (existing) - new collections for notes, activities (005-time-tracking-notes)
+- Python 3.11+ + smtplib (stdlib), email.mime (stdlib), existing Ara orchestrator (007-email-action-items)
+- N/A (reads from existing MongoDB notes collection) (007-email-action-items)
+- Python 3.11+ (existing codebase) + sounddevice (audio), faster-whisper (STT), piper (TTS), ollama (LLM) - all existing (008-passive-speech-reprocess)
+- In-memory request buffer (no persistent storage needed) (008-passive-speech-reprocess)
 
 - Python 3.11+ (001-ara-voice-assistant)
 
@@ -32,9 +36,9 @@ cd src [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECHNOLO
 Python 3.11+: Follow standard conventions
 
 ## Recent Changes
+- 008-passive-speech-reprocess: Added Python 3.11+ (existing codebase) + sounddevice (audio), faster-whisper (STT), piper (TTS), ollama (LLM) - all existing
+- 007-email-action-items: Added Python 3.11+ + smtplib (stdlib), email.mime (stdlib), existing Ara orchestrator
 - 005-time-tracking-notes: Added Python 3.11+ + Existing codebase (ara.router, ara.storage, ara.llm), Ollama for entity extraction
-- 006-smart-query-routing: Added Python 3.11+ + Existing codebase (ara.router, ara.storage, ara.search)
-- 004-mongodb-data-store: Added Python 3.11+ + pymongo (MongoDB driver), motor (async driver), Docker
 
 
 <!-- MANUAL ADDITIONS START -->

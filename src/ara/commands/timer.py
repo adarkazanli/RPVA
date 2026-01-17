@@ -264,11 +264,30 @@ class TimerManager:
         return " and ".join(parts) if parts else "less than a second"
 
 
+WORD_TO_NUMBER: dict[str, int] = {
+    "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+    "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+    "eleven": 11, "twelve": 12, "thirteen": 13, "fourteen": 14, "fifteen": 15,
+    "sixteen": 16, "seventeen": 17, "eighteen": 18, "nineteen": 19, "twenty": 20,
+    "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60,
+    "a": 1, "an": 1,  # "a minute", "an hour"
+}
+
+
+def _convert_words_to_numbers(text: str) -> str:
+    """Convert word numbers to digits in text."""
+    result = text
+    for word, num in WORD_TO_NUMBER.items():
+        # Match whole words only
+        result = re.sub(rf"\b{word}\b", str(num), result)
+    return result
+
+
 def parse_duration(text: str) -> int | None:
     """Parse a natural language duration into seconds.
 
     Args:
-        text: Natural language duration (e.g., "5 minutes", "1 hour").
+        text: Natural language duration (e.g., "5 minutes", "1 hour", "five minutes").
 
     Returns:
         Duration in seconds, or None if unparseable.
@@ -278,11 +297,15 @@ def parse_duration(text: str) -> int | None:
         300
         >>> parse_duration("1 hour and 30 minutes")
         5400
+        >>> parse_duration("five minutes")
+        300
     """
     if not text:
         return None
 
     text = text.lower().strip()
+    # Convert word numbers to digits
+    text = _convert_words_to_numbers(text)
     total_seconds = 0
     found_match = False
 
