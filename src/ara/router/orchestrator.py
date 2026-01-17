@@ -690,9 +690,9 @@ class Orchestrator:
                 except Exception as e:
                     logger.warning(f"Failed to log interaction to MongoDB: {e}")
 
-            # Play long beep to signal end of interaction
+            # Play long beep to signal end of interaction (blocking to avoid segfault)
             if self._feedback:
-                self._feedback.play(FeedbackType.RESPONSE_COMPLETE)
+                self._feedback.play(FeedbackType.RESPONSE_COMPLETE, blocking=True)
 
             return InteractionResult(
                 transcript=transcript,

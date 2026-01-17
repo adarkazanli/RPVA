@@ -30,11 +30,12 @@ class AudioFeedback(Protocol):
     to provide auditory feedback to users.
     """
 
-    def play(self, feedback_type: FeedbackType) -> None:
+    def play(self, feedback_type: FeedbackType, *, blocking: bool = False) -> None:
         """Play feedback sound for the given event type.
 
         Args:
             feedback_type: The type of event to provide feedback for
+            blocking: If True, wait for playback to complete before returning
         """
         ...
 

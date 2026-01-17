@@ -164,22 +164,33 @@ class SoundFeedback:
                 except Exception:
                     pass  # Will fall back to generated tone
 
-    def play(self, feedback_type: FeedbackType) -> None:
-        """Play feedback sound for the given event type."""
+    def play(self, feedback_type: FeedbackType, *, blocking: bool = False) -> None:
+        """Play feedback sound for the given event type.
+
+        Args:
+            feedback_type: The type of feedback to play
+            blocking: If True, wait for playback to complete before returning
+        """
         if not self._enabled:
             return
 
         # Try cached sound file first
         if feedback_type in self._sound_cache:
             audio_data, sample_rate = self._sound_cache[feedback_type]
-            self._playback.play_async(audio_data, sample_rate)
+            if blocking:
+                self._playback.play(audio_data, sample_rate)
+            else:
+                self._playback.play_async(audio_data, sample_rate)
             return
 
         # Fall back to generated tone
         frequency = TONE_FREQUENCIES.get(feedback_type, 440)
         duration = TONE_DURATIONS.get(feedback_type, 100)
         audio_data = generate_tone(frequency, duration)
-        self._playback.play_async(audio_data, 22050)
+        if blocking:
+            self._playback.play(audio_data, 22050)
+        else:
+            self._playback.play_async(audio_data, 22050)
 
     def set_enabled(self, enabled: bool) -> None:
         """Enable or disable feedback sounds."""
@@ -202,7 +213,9 @@ class MockFeedback:
         self._enabled = True
         self._events: list[FeedbackType] = []
 
-    def play(self, feedback_type: FeedbackType) -> None:
+    def play(
+        self, feedback_type: FeedbackType, *, blocking: bool = False  # noqa: ARG002
+    ) -> None:
         """Record feedback event."""
         if self._enabled:
             self._events.append(feedback_type)
