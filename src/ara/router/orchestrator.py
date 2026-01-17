@@ -230,7 +230,7 @@ class Orchestrator:
         self._check_thread: threading.Thread | None = None
 
         # Recording configuration - default (questions/commands)
-        self._silence_timeout_ms = 2000  # Stop recording after 2s silence
+        self._silence_timeout_ms = 2500  # Stop recording after 2.5s silence (allow natural pauses)
         self._max_recording_ms = 10000  # Max 10s recording
 
         # Recording configuration - note-taking mode (patient, no interruption)

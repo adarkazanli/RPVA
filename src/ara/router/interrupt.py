@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 # Balance between avoiding TTS echo (too low) and detecting "stop"/"wait" (too high)
 # 750 = TTS echo triggers false positives, 2500 = user voice not detected
 INTERRUPT_THRESHOLD: float = 1500.0  # RMS energy threshold to trigger interrupt
-SILENCE_TIMEOUT_MS: int = 2000  # Milliseconds of silence before reprocessing
+SILENCE_TIMEOUT_MS: int = 2500  # Milliseconds of silence before reprocessing
 CONTINUATION_WINDOW_S: float = 5.0  # Seconds after response to accept continuations
 TTS_STOP_TIMEOUT_MS: int = 500  # Maximum time to stop TTS playback
 INTERRUPT_FEEDBACK_FREQ: int = 200  # Hz frequency for interrupt acknowledgment tone
