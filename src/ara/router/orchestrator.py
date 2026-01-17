@@ -473,40 +473,58 @@ class Orchestrator:
                         from .interrupt import is_special_keyword
 
                         if is_special_keyword(interrupt_text.strip()):
-                            # Handle pause-and-wait for special keywords
+                            # Handle special keywords with different behaviors
                             logger.info(f"Special keyword detected: '{interrupt_text}'")
-                            pause_keywords = {"stop", "wait", "hold on"}
+                            stop_keywords = {"stop"}  # Full stop, end interaction
+                            wait_keywords = {"wait", "hold on"}  # Pause, add context, reprocess
                             cancel_keywords = {"cancel", "never mind", "nevermind"}
                             # Note: "actually" is handled in else branch as redirect
 
                             text_lower = interrupt_text.lower().strip()
 
-                            if text_lower in pause_keywords:
-                                # Pause and wait for follow-up
-                                clarification = "OK, I've stopped. What would you like instead?"
+                            if text_lower in stop_keywords:
+                                # Full stop - end interaction immediately
+                                response_text = "OK."
+                                if self._synthesizer:
+                                    synth = self._synthesizer.synthesize(response_text)
+                                    self._playback.play(synth.audio, synth.sample_rate)
+                                transcript = interrupt_text
+                                self._interrupt_manager.reset()
+                            elif text_lower in wait_keywords:
+                                # Wait for more context to add to original request
+                                clarification = "Go ahead."
                                 if self._synthesizer:
                                     synth = self._synthesizer.synthesize(clarification)
                                     self._playback.play(synth.audio, synth.sample_rate)
 
-                                # Wait for follow-up request (buffer preserved)
+                                # Wait for follow-up context (buffer preserved)
                                 follow_up = self._record_follow_up(timeout_ms=10000)
                                 if follow_up and self._transcriber:
                                     follow_result = self._transcriber.transcribe(follow_up, 16000)
                                     if follow_result.text.strip():
-                                        # Process follow-up as new request
-                                        new_intent = self._intent_classifier.classify(
-                                            follow_result.text.strip()
+                                        # Add context to buffer and reprocess combined
+                                        self._interrupt_manager.request_buffer.append(
+                                            follow_result.text.strip(), is_interrupt=True
                                         )
-                                        new_response = self._handle_intent(new_intent, interaction_id)
-                                        _log_interaction_timing("responded", new_response)
+                                        combined_request = self._interrupt_manager.get_combined_request()
+                                        logger.info(f"Wait combined: '{combined_request}'")
+                                        _log_interaction_timing("captured", combined_request)
+
+                                        combined_intent = self._intent_classifier.classify(combined_request)
+                                        combined_response = self._handle_intent(
+                                            combined_intent, interaction_id
+                                        )
+                                        _log_interaction_timing("responded", combined_response)
 
                                         if self._synthesizer:
-                                            new_synth = self._synthesizer.synthesize(new_response)
-                                            self._playback.play(new_synth.audio, new_synth.sample_rate)
+                                            combined_synth = self._synthesizer.synthesize(combined_response)
+                                            self._playback.play(
+                                                combined_synth.audio, combined_synth.sample_rate
+                                            )
 
-                                        transcript = follow_result.text.strip()
-                                        response_text = new_response
-                                        intent = new_intent
+                                        transcript = combined_request
+                                        response_text = combined_response
+                                        intent = combined_intent
                                 else:
                                     transcript = interrupt_text
                                     response_text = clarification
