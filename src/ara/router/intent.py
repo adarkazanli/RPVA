@@ -348,6 +348,8 @@ class IntentClassifier:
         r"(?:i\s+)?(?:just\s+)?(?:had\s+a\s+)?(?:meeting|discussion|conversation|talk)\s+(?:with\s+)?(.+)",
         r"(?:i\s+)?(?:just\s+)?(?:talked|spoke|met)\s+(?:to|with)\s+(.+)",
         r"(?:capture|add|save|record|log)\s+(?:it|this|that)?\s*(?:as\s+)?(?:an?\s+)?action\s+items?",
+        # "add X to my action items" pattern
+        r"(?:let'?s\s+)?(?:add|put)\s+(.+?)\s+(?:to|on|in)\s+(?:my\s+)?action\s*items?",
     ]
 
     # Note query patterns - "what did I discuss with John?"
@@ -1160,7 +1162,7 @@ class IntentClassifier:
         """
         # Exclude capture phrases - these should be NOTE_CAPTURE instead
         capture_verbs = re.compile(
-            r"\b(capture|add|save|record|log)\b.*\baction\s*items?\b", re.IGNORECASE
+            r"\b(capture|add|save|record|log|put)\b.*\baction\s*items?\b", re.IGNORECASE
         )
         if capture_verbs.search(text):
             return None
