@@ -597,6 +597,10 @@ class Orchestrator:
                 else:
                     latencies["play_ms"] = int((time.time() - play_start) * 1000)
 
+                    # Play beep to signal ready for input, THEN listen
+                    if self._feedback:
+                        self._feedback.play(FeedbackType.RESPONSE_COMPLETE, blocking=True)
+
                     # Start continuation window for potential follow-up speech
                     continuation_result = self._handle_continuation_window(
                         interaction_id
@@ -689,10 +693,6 @@ class Orchestrator:
                     logger.debug("Interaction saved to MongoDB")
                 except Exception as e:
                     logger.warning(f"Failed to log interaction to MongoDB: {e}")
-
-            # Play long beep to signal end of interaction (blocking to avoid segfault)
-            if self._feedback:
-                self._feedback.play(FeedbackType.RESPONSE_COMPLETE, blocking=True)
 
             return InteractionResult(
                 transcript=transcript,
