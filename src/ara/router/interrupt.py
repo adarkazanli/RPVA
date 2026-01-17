@@ -19,7 +19,9 @@ if TYPE_CHECKING:
     from ..stt.transcriber import Transcriber
 
 # Constants
-INTERRUPT_THRESHOLD: float = 750.0  # RMS energy threshold to trigger interrupt
+# Higher threshold (2500) to avoid TTS echo triggering false interrupts
+# User must speak clearly/loudly to interrupt with "stop" or "wait"
+INTERRUPT_THRESHOLD: float = 2500.0  # RMS energy threshold to trigger interrupt
 SILENCE_TIMEOUT_MS: int = 2000  # Milliseconds of silence before reprocessing
 CONTINUATION_WINDOW_S: float = 5.0  # Seconds after response to accept continuations
 TTS_STOP_TIMEOUT_MS: int = 500  # Maximum time to stop TTS playback

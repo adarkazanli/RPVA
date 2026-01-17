@@ -441,10 +441,11 @@ class TestConstants:
     """Tests for interrupt constants (T015)."""
 
     def test_interrupt_threshold_defined(self) -> None:
-        """Verify INTERRUPT_THRESHOLD is defined and reasonable."""
+        """Verify INTERRUPT_THRESHOLD is defined and high enough to avoid TTS echo."""
         from ara.router.interrupt import INTERRUPT_THRESHOLD
 
-        assert INTERRUPT_THRESHOLD == 750.0
+        # Higher threshold (2500) to avoid TTS audio bleeding into mic
+        assert INTERRUPT_THRESHOLD == 2500.0
 
     def test_silence_timeout_defined(self) -> None:
         """Verify SILENCE_TIMEOUT_MS is defined."""
