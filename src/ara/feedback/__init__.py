@@ -19,6 +19,7 @@ class FeedbackType(Enum):
     REMINDER_ALERT = "reminder_alert"
     SUCCESS = "success"
     INTERRUPT_ACKNOWLEDGED = "interrupt_ack"
+    THINKING = "thinking"  # Looping chime while waiting for LLM
 
 
 class AudioFeedback(Protocol):

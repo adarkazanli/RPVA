@@ -5,6 +5,7 @@ Wake Word → STT → Intent → LLM/Command → TTS → Playback
 """
 
 import logging
+import re
 import threading
 import time
 import uuid
@@ -275,6 +276,14 @@ class Orchestrator:
             )
             logger.info("Interrupt manager initialized")
 
+        # Track last response for implicit follow-up context
+        self._last_response: str = ""
+        self._last_response_timestamp: datetime | None = None
+
+        # Thinking indicator state
+        self._thinking_active = False
+        self._thinking_thread: threading.Thread | None = None
+
     @classmethod
     def from_config(
         cls,
@@ -353,6 +362,13 @@ class Orchestrator:
         start_time = time.time()
         interaction_id = uuid.uuid4()
 
+        # Clear stale follow-up context (older than 60 seconds)
+        if self._last_response_timestamp:
+            age = (datetime.now(UTC) - self._last_response_timestamp).total_seconds()
+            if age > 60:
+                self._last_response = ""
+                self._last_response_timestamp = None
+
         # Ensure required components are available
         if (
             not self._feedback
@@ -429,6 +445,10 @@ class Orchestrator:
             response_text = self._handle_intent(intent, interaction_id)
             latencies["llm_ms"] = int((time.time() - response_start) * 1000)
             logger.info(f"Response: '{response_text[:50]}...'")
+
+            # Store response for implicit follow-up context
+            self._last_response = response_text
+            self._last_response_timestamp = datetime.now(UTC)
 
             # Log response timing
             _log_interaction_timing("responded", response_text)
@@ -515,6 +535,10 @@ class Orchestrator:
                                     )
                                     _log_interaction_timing("responded", combined_response)
 
+                                    # Update last response for follow-up context
+                                    self._last_response = combined_response
+                                    self._last_response_timestamp = datetime.now(UTC)
+
                                     if self._synthesizer:
                                         combined_synth = self._synthesizer.synthesize(combined_response)
                                         self._playback.play(
@@ -569,6 +593,10 @@ class Orchestrator:
                         follow_up_response = self._handle_intent(follow_up_intent, interaction_id)
                         _log_interaction_timing("responded", follow_up_response)
 
+                        # Update last response for follow-up context
+                        self._last_response = follow_up_response
+                        self._last_response_timestamp = datetime.now(UTC)
+
                         # Synthesize and play follow-up response
                         follow_up_synthesis = self._synthesizer.synthesize(follow_up_response)
                         self._playback.play(
@@ -601,8 +629,6 @@ class Orchestrator:
             # Log interaction to MongoDB
             if self._interaction_storage is not None:
                 try:
-                    from datetime import UTC, datetime
-
                     from ..storage.models import InteractionDTO
 
                     mongo_interaction = InteractionDTO(
@@ -651,8 +677,6 @@ class Orchestrator:
         Returns:
             Response text
         """
-        from datetime import UTC, datetime
-
         interaction_id = uuid.uuid4()
         intent = self._intent_classifier.classify(text)
         response = self._handle_intent(intent, interaction_id)
@@ -873,7 +897,11 @@ class Orchestrator:
 
         # Fallback to LLM with caveat (if enabled in routing decision)
         if routing_decision.fallback_source == DataSource.LLM and self._llm:
-            llm_response = self._llm.generate(intent.raw_text)
+            self._start_thinking_indicator()
+            try:
+                llm_response = self._llm.generate(intent.raw_text)
+            finally:
+                self._stop_thinking_indicator()
             response_text = llm_response.text.strip()
 
             # Add caveat prefix if routing decision says we should
@@ -908,10 +936,24 @@ class Orchestrator:
         if self._user_name:
             context += f" [User's name: {self._user_name}]"
 
+        # Detect implicit follow-up and inject previous response context
+        if self._is_implicit_follow_up(intent.raw_text) and self._last_response:
+            # Truncate to avoid token bloat
+            prev_context = self._last_response[:300]
+            if len(self._last_response) > 300:
+                prev_context += "..."
+            context += f"\n[User is asking about your previous response: {prev_context}]"
+
         # Combine context with user query
         query_with_context = f"{context}\n\nUser: {intent.raw_text}"
 
-        llm_response = self._llm.generate(query_with_context)
+        # Play thinking indicator while waiting for LLM
+        self._start_thinking_indicator()
+        try:
+            llm_response = self._llm.generate(query_with_context)
+        finally:
+            self._stop_thinking_indicator()
+
         return llm_response.text.strip()
 
     def _handle_timer_set(self, intent: Intent, interaction_id: uuid.UUID) -> str:
@@ -1472,7 +1514,11 @@ class Orchestrator:
                     return "I couldn't search for that right now."
                 # Fall back to LLM
                 logger.info("Falling back to LLM for response")
-                llm_response = self._llm.generate(intent.raw_text)
+                self._start_thinking_indicator()
+                try:
+                    llm_response = self._llm.generate(intent.raw_text)
+                finally:
+                    self._stop_thinking_indicator()
                 return llm_response.text.strip()
 
             # Log what we got back
@@ -1550,7 +1596,11 @@ class Orchestrator:
                 return "I encountered an error while searching."
             # Fall back to LLM
             logger.info("Falling back to LLM due to exception")
-            llm_response = self._llm.generate(intent.raw_text)
+            self._start_thinking_indicator()
+            try:
+                llm_response = self._llm.generate(intent.raw_text)
+            finally:
+                self._stop_thinking_indicator()
             return llm_response.text.strip()
 
     def _handle_system_command(self, intent: Intent) -> str:
@@ -2694,6 +2744,52 @@ class Orchestrator:
         text_lower = text.lower().strip()
         return any(text_lower.startswith(phrase) for phrase in self._note_trigger_phrases)
 
+    def _is_implicit_follow_up(self, text: str) -> bool:
+        """Detect if text references previous response without explicit context.
+
+        Used to inject last response context for follow-up questions like
+        "tell me more about that" or "which one?".
+
+        Args:
+            text: User's query text
+
+        Returns:
+            True if text appears to be a follow-up question
+        """
+        patterns = [
+            r"\b(?:tell|tell me)\s+(?:more|about)\b",
+            r"\b(?:which|what)\s+(?:one|about)\b",
+            r"\b(?:the\s+)?(?:first|second|last|other)\s+(?:one)?\b",
+            r"\b(?:expand|clarify|explain)\s+(?:that|it|more)?\b",
+            r"^(?:why|how|and)\s",  # Short follow-up starters
+        ]
+        text_lower = text.lower()
+        return any(re.search(p, text_lower) for p in patterns)
+
+    def _start_thinking_indicator(self) -> None:
+        """Start playing thinking indicator sound in background."""
+        if not self._feedback:
+            return
+        self._thinking_active = True
+        self._thinking_thread = threading.Thread(
+            target=self._play_thinking_loop,
+            daemon=True,
+        )
+        self._thinking_thread.start()
+
+    def _play_thinking_loop(self) -> None:
+        """Background loop that plays chime while thinking."""
+        while self._thinking_active:
+            self._feedback.play(FeedbackType.THINKING)
+            time.sleep(0.8)  # 800ms between chimes
+
+    def _stop_thinking_indicator(self) -> None:
+        """Stop the thinking indicator."""
+        self._thinking_active = False
+        if self._thinking_thread:
+            self._thinking_thread.join(timeout=0.5)
+            self._thinking_thread = None
+
     def _record_with_mode_detection(self) -> tuple[bytes, bool]:
         """Record speech with automatic note-taking mode detection.
 
@@ -2832,6 +2928,10 @@ class Orchestrator:
 
                 combined_response = self._handle_intent(combined_intent, interaction_id)
                 _log_interaction_timing("responded", combined_response)
+
+                # Update last response for follow-up context
+                self._last_response = combined_response
+                self._last_response_timestamp = datetime.now(UTC)
 
                 # Synthesize and play combined response
                 if self._synthesizer and self._playback:

@@ -28,6 +28,7 @@ TONE_FREQUENCIES: dict[FeedbackType, int] = {
     FeedbackType.REMINDER_ALERT: 800,  # Slightly lower than timer
     FeedbackType.SUCCESS: 523,  # C5 - positive
     FeedbackType.INTERRUPT_ACKNOWLEDGED: 200,  # Low "boop" - distinct from wake beep
+    FeedbackType.THINKING: 523,  # C5 - pleasant chime while waiting for LLM
 }
 
 # Default durations for generated tones (ms)
@@ -40,6 +41,7 @@ TONE_DURATIONS: dict[FeedbackType, int] = {
     FeedbackType.REMINDER_ALERT: 400,
     FeedbackType.SUCCESS: 200,
     FeedbackType.INTERRUPT_ACKNOWLEDGED: 100,  # Quick, doesn't delay response
+    FeedbackType.THINKING: 150,  # Short chime, loops every 800ms
 }
 
 
