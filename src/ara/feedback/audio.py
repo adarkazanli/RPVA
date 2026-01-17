@@ -29,6 +29,7 @@ TONE_FREQUENCIES: dict[FeedbackType, int] = {
     FeedbackType.SUCCESS: 523,  # C5 - positive
     FeedbackType.INTERRUPT_ACKNOWLEDGED: 200,  # Low "boop" - distinct from wake beep
     FeedbackType.THINKING: 523,  # C5 - pleasant chime while waiting for LLM
+    FeedbackType.RESPONSE_COMPLETE: 440,  # A4 - neutral long beep at end
 }
 
 # Default durations for generated tones (ms)
@@ -42,6 +43,7 @@ TONE_DURATIONS: dict[FeedbackType, int] = {
     FeedbackType.SUCCESS: 200,
     FeedbackType.INTERRUPT_ACKNOWLEDGED: 100,  # Quick, doesn't delay response
     FeedbackType.THINKING: 150,  # Short chime, loops every 800ms
+    FeedbackType.RESPONSE_COMPLETE: 400,  # Long beep to signal end of interaction
 }
 
 
