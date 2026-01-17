@@ -469,117 +469,65 @@ class Orchestrator:
                     if interrupt_text:
                         logger.info(f"Interrupt text: '{interrupt_text}'")
 
-                        # Check for special keywords (stop, wait, cancel, never mind)
-                        from .interrupt import is_special_keyword
+                        # Only respond to explicit interrupt keywords (stop, wait)
+                        # Ignore noise and other speech to reduce false positives
+                        stop_keywords = {"stop"}  # Full stop, end interaction
+                        wait_keywords = {"wait", "hold on"}  # Pause, add context, reprocess
 
-                        if is_special_keyword(interrupt_text.strip()):
-                            # Handle special keywords with different behaviors
-                            logger.info(f"Special keyword detected: '{interrupt_text}'")
-                            stop_keywords = {"stop"}  # Full stop, end interaction
-                            wait_keywords = {"wait", "hold on"}  # Pause, add context, reprocess
-                            cancel_keywords = {"cancel", "never mind", "nevermind"}
-                            # Note: "actually" is handled in else branch as redirect
+                        text_lower = interrupt_text.lower().strip()
 
-                            text_lower = interrupt_text.lower().strip()
+                        if text_lower in stop_keywords:
+                            # Full stop - end interaction immediately
+                            logger.info("Stop keyword - ending interaction")
+                            response_text = "OK."
+                            if self._synthesizer:
+                                synth = self._synthesizer.synthesize(response_text)
+                                self._playback.play(synth.audio, synth.sample_rate)
+                            transcript = interrupt_text
+                            self._interrupt_manager.reset()
+                        elif text_lower in wait_keywords:
+                            # Wait for more context to add to original request
+                            logger.info("Wait keyword - prompting for context")
+                            clarification = "Go ahead."
+                            if self._synthesizer:
+                                synth = self._synthesizer.synthesize(clarification)
+                                self._playback.play(synth.audio, synth.sample_rate)
 
-                            if text_lower in stop_keywords:
-                                # Full stop - end interaction immediately
-                                response_text = "OK."
-                                if self._synthesizer:
-                                    synth = self._synthesizer.synthesize(response_text)
-                                    self._playback.play(synth.audio, synth.sample_rate)
-                                transcript = interrupt_text
-                                self._interrupt_manager.reset()
-                            elif text_lower in wait_keywords:
-                                # Wait for more context to add to original request
-                                clarification = "Go ahead."
-                                if self._synthesizer:
-                                    synth = self._synthesizer.synthesize(clarification)
-                                    self._playback.play(synth.audio, synth.sample_rate)
-
-                                # Wait for follow-up context (buffer preserved)
-                                follow_up = self._record_follow_up(timeout_ms=10000)
-                                if follow_up and self._transcriber:
-                                    follow_result = self._transcriber.transcribe(follow_up, 16000)
-                                    if follow_result.text.strip():
-                                        # Add context to buffer and reprocess combined
-                                        self._interrupt_manager.request_buffer.append(
-                                            follow_result.text.strip(), is_interrupt=True
-                                        )
-                                        combined_request = self._interrupt_manager.get_combined_request()
-                                        logger.info(f"Wait combined: '{combined_request}'")
-                                        _log_interaction_timing("captured", combined_request)
-
-                                        combined_intent = self._intent_classifier.classify(combined_request)
-                                        combined_response = self._handle_intent(
-                                            combined_intent, interaction_id
-                                        )
-                                        _log_interaction_timing("responded", combined_response)
-
-                                        if self._synthesizer:
-                                            combined_synth = self._synthesizer.synthesize(combined_response)
-                                            self._playback.play(
-                                                combined_synth.audio, combined_synth.sample_rate
-                                            )
-
-                                        transcript = combined_request
-                                        response_text = combined_response
-                                        intent = combined_intent
-                                else:
-                                    transcript = interrupt_text
-                                    response_text = clarification
-                            elif text_lower in cancel_keywords:
-                                # Cancel and acknowledge
-                                response_text = "OK, cancelled."
-                                if self._synthesizer:
-                                    synth = self._synthesizer.synthesize(response_text)
-                                    self._playback.play(synth.audio, synth.sample_rate)
-                                transcript = interrupt_text
-                                self._interrupt_manager.reset()
-                            else:
-                                # Redirect keyword (actually) - process combined
-                                combined_request = self._interrupt_manager.get_combined_request()
-                                logger.info(f"Redirect combined: '{combined_request}'")
-                                _log_interaction_timing("captured", combined_request)
-
-                                combined_intent = self._intent_classifier.classify(combined_request)
-                                combined_response = self._handle_intent(
-                                    combined_intent, interaction_id
-                                )
-                                _log_interaction_timing("responded", combined_response)
-
-                                if self._synthesizer:
-                                    combined_synthesis = self._synthesizer.synthesize(combined_response)
-                                    self._playback.play(
-                                        combined_synthesis.audio, combined_synthesis.sample_rate
+                            # Wait for follow-up context (buffer preserved)
+                            follow_up = self._record_follow_up(timeout_ms=10000)
+                            if follow_up and self._transcriber:
+                                follow_result = self._transcriber.transcribe(follow_up, 16000)
+                                if follow_result.text.strip():
+                                    # Add context to buffer and reprocess combined
+                                    self._interrupt_manager.request_buffer.append(
+                                        follow_result.text.strip(), is_interrupt=True
                                     )
+                                    combined_request = self._interrupt_manager.get_combined_request()
+                                    logger.info(f"Wait combined: '{combined_request}'")
+                                    _log_interaction_timing("captured", combined_request)
 
-                                transcript = combined_request
-                                response_text = combined_response
-                                intent = combined_intent
+                                    combined_intent = self._intent_classifier.classify(combined_request)
+                                    combined_response = self._handle_intent(
+                                        combined_intent, interaction_id
+                                    )
+                                    _log_interaction_timing("responded", combined_response)
+
+                                    if self._synthesizer:
+                                        combined_synth = self._synthesizer.synthesize(combined_response)
+                                        self._playback.play(
+                                            combined_synth.audio, combined_synth.sample_rate
+                                        )
+
+                                    transcript = combined_request
+                                    response_text = combined_response
+                                    intent = combined_intent
+                            else:
+                                transcript = interrupt_text
+                                response_text = clarification
                         else:
-                            # Normal interrupt - get combined request and reprocess
-                            combined_request = self._interrupt_manager.get_combined_request()
-                            logger.info(f"Combined request: '{combined_request}'")
-                            _log_interaction_timing("captured", combined_request)
-
-                            # Re-classify and handle
-                            combined_intent = self._intent_classifier.classify(combined_request)
-                            logger.info(f"Combined intent: {combined_intent.type.value}")
-
-                            combined_response = self._handle_intent(combined_intent, interaction_id)
-                            _log_interaction_timing("responded", combined_response)
-
-                            # Synthesize and play combined response
-                            combined_synthesis = self._synthesizer.synthesize(combined_response)
-                            self._playback.play(
-                                combined_synthesis.audio, combined_synthesis.sample_rate
-                            )
-
-                            # Update for logging
-                            transcript = combined_request
-                            response_text = combined_response
-                            intent = combined_intent
+                            # Not a recognized interrupt keyword - ignore (likely noise)
+                            logger.info(f"Ignoring non-keyword interrupt: '{interrupt_text}'")
+                            self._interrupt_manager.reset()
                 else:
                     latencies["play_ms"] = int((time.time() - play_start) * 1000)
 

@@ -190,45 +190,36 @@ class TestInterruptFlowUS3:
 
 
 class TestInterruptFlowUS4:
-    """Integration tests for User Story 4: Change Intent (T044)."""
+    """Integration tests for User Story 4: Interrupt keywords (T044).
 
-    def test_intent_redirect_with_actually(self) -> None:
-        """Verify 'actually' redirects to new intent."""
-        from ara.router.interrupt import is_special_keyword
+    Only 'stop', 'wait', and 'hold on' are recognized as interrupt keywords
+    to reduce false positives from noise.
+    """
 
-        mock_capture = MagicMock()
-        mock_playback = MagicMock()
-        mock_transcriber = MagicMock()
-
-        manager = InterruptManager(
-            capture=mock_capture,
-            playback=mock_playback,
-            transcriber=mock_transcriber,
-        )
-
-        manager.set_initial_request("Tell me about Python")
-
-        # User redirects
-        redirect_text = "actually"
-        assert is_special_keyword(redirect_text)
-
-        # After redirect, system should handle the new intent
-        manager.request_buffer.append("actually what's on my calendar", is_interrupt=True)
-
-        combined = manager.get_combined_request()
-        # The combined text includes both, but intent classifier
-        # will detect the redirect intent from "actually"
-        assert "actually" in combined
-        assert "calendar" in combined
-
-    def test_stop_keyword_pauses_response(self) -> None:
-        """Verify 'stop' keyword is recognized."""
+    def test_stop_keyword_ends_interaction(self) -> None:
+        """Verify 'stop' is recognized as interrupt keyword."""
         from ara.router.interrupt import is_special_keyword
 
         assert is_special_keyword("stop")
+        assert is_special_keyword("Stop")
+        assert is_special_keyword("STOP")
+
+    def test_wait_keyword_prompts_for_context(self) -> None:
+        """Verify 'wait' and 'hold on' are recognized as interrupt keywords."""
+        from ara.router.interrupt import is_special_keyword
+
         assert is_special_keyword("wait")
-        assert is_special_keyword("cancel")
-        assert is_special_keyword("never mind")
+        assert is_special_keyword("hold on")
+
+    def test_other_words_ignored_to_reduce_noise(self) -> None:
+        """Verify other words are NOT recognized to reduce noise sensitivity."""
+        from ara.router.interrupt import is_special_keyword
+
+        # These are no longer special keywords to avoid false positives
+        assert not is_special_keyword("cancel")
+        assert not is_special_keyword("never mind")
+        assert not is_special_keyword("actually")
+        assert not is_special_keyword("random noise")
 
 
 class TestEnergyCalculation:

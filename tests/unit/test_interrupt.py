@@ -398,7 +398,11 @@ class TestContinuationWindowTiming:
 
 
 class TestSpecialKeywords:
-    """Tests for special keyword detection (T043)."""
+    """Tests for special keyword detection (T043).
+
+    Only 'stop', 'wait', and 'hold on' are recognized as interrupt keywords
+    to reduce false positives from noise.
+    """
 
     def test_stop_keyword_detected(self) -> None:
         """Verify 'stop' is recognized as special keyword."""
@@ -409,23 +413,21 @@ class TestSpecialKeywords:
         assert is_special_keyword("STOP") is True
 
     def test_wait_keyword_detected(self) -> None:
-        """Verify 'wait' is recognized as special keyword."""
+        """Verify 'wait' and 'hold on' are recognized as special keywords."""
         from ara.router.interrupt import is_special_keyword
 
         assert is_special_keyword("wait") is True
+        assert is_special_keyword("hold on") is True
 
-    def test_cancel_keyword_detected(self) -> None:
-        """Verify 'cancel' is recognized as special keyword."""
+    def test_other_words_not_special(self) -> None:
+        """Verify other words are NOT recognized to reduce noise sensitivity."""
         from ara.router.interrupt import is_special_keyword
 
-        assert is_special_keyword("cancel") is True
-
-    def test_never_mind_keyword_detected(self) -> None:
-        """Verify 'never mind' is recognized as special keyword."""
-        from ara.router.interrupt import is_special_keyword
-
-        assert is_special_keyword("never mind") is True
-        assert is_special_keyword("nevermind") is True
+        # These used to be special but are removed to reduce false positives
+        assert is_special_keyword("cancel") is False
+        assert is_special_keyword("never mind") is False
+        assert is_special_keyword("nevermind") is False
+        assert is_special_keyword("actually") is False
 
     def test_normal_text_not_special(self) -> None:
         """Verify normal text is not recognized as special."""

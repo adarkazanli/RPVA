@@ -26,16 +26,13 @@ TTS_STOP_TIMEOUT_MS: int = 500  # Maximum time to stop TTS playback
 INTERRUPT_FEEDBACK_FREQ: int = 200  # Hz frequency for interrupt acknowledgment tone
 INTERRUPT_FEEDBACK_MS: int = 100  # Duration of interrupt acknowledgment tone
 
-# Special keywords that indicate intent change
+# Special keywords that trigger interrupt behavior
+# Only "stop" and "wait/hold on" are recognized to reduce false positives from noise
 SPECIAL_KEYWORDS = frozenset(
     {
-        "stop",
-        "wait",
-        "cancel",
-        "never mind",
-        "nevermind",
-        "actually",
-        "hold on",
+        "stop",      # Full stop, end interaction
+        "wait",      # Pause, add context, reprocess
+        "hold on",   # Same as wait
     }
 )
 
