@@ -310,6 +310,8 @@ class IntentClassifier:
         r"what\s+(?:was|is)\s+the\s+duration\s+(?:of\s+)?(?:my\s+)?(.+)",
         r"(?:tell\s+me\s+)?how\s+long\s+(?:I\s+)?(?:spent|took)\s+(?:on|with|doing|in)\s+(?:the\s+)?(.+)",
         r"duration\s+(?:of\s+)?(?:my\s+)?(?:last\s+)?(.+)",
+        # "how long did the last activity last", "how long did my workout take"
+        r"how\s+long\s+did\s+(?:the\s+)?(?:last\s+)?(.+?)(?:\s+last|\s+take)?\??$",
     ]
 
     # Activity search patterns - "what was I doing around 10 AM?"

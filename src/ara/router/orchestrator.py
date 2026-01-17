@@ -389,6 +389,9 @@ class Orchestrator:
             transcript_result = self._transcriber.transcribe(audio_data, 16000)
             transcript = transcript_result.text.strip()
 
+            # Clean transcript (remove wake word, garbled segments from Whisper)
+            transcript = self._clean_transcript(transcript)
+
             # Strip stop keyword if present (case-insensitive) - only for note mode
             if is_note_mode and transcript.lower().endswith(self._stop_keyword):
                 transcript = transcript[: -len(self._stop_keyword)].strip()
@@ -2633,6 +2636,51 @@ class Orchestrator:
             self._capture.stop()
 
         return audio_buffer
+
+    def _clean_transcript(self, text: str) -> str:
+        """Clean transcript by removing wake word and garbled segments.
+
+        Whisper sometimes includes multiple utterances separated by | and
+        may transcribe the wake word (porcupine) if user says it during recording.
+
+        Args:
+            text: Raw transcript from Whisper
+
+        Returns:
+            Cleaned transcript with wake word segments removed
+        """
+        if not text:
+            return text
+
+        # Wake word variants that Whisper might transcribe
+        wake_word_variants = {"porcupine", "purcobine", "porcubine", "porcopine"}
+
+        # If transcript contains |, split and filter segments
+        if "|" in text:
+            segments = [s.strip() for s in text.split("|")]
+            clean_segments = []
+            for segment in segments:
+                segment_lower = segment.lower()
+                # Skip segments containing wake word variants
+                if any(variant in segment_lower for variant in wake_word_variants):
+                    continue
+                # Skip very short garbled segments (like "How- How-")
+                if len(segment) < 5 and "-" in segment:
+                    continue
+                if segment:
+                    clean_segments.append(segment)
+            return " ".join(clean_segments).strip()
+
+        # Single segment - just remove wake word if at end
+        text_lower = text.lower()
+        for variant in wake_word_variants:
+            if variant in text_lower:
+                # Remove the wake word and surrounding punctuation/space
+                import re
+                pattern = rf"\s*{variant}[?!.,]?\s*"
+                text = re.sub(pattern, " ", text, flags=re.IGNORECASE).strip()
+
+        return text
 
     def _is_note_trigger(self, text: str) -> bool:
         """Check if text starts with a note-taking trigger phrase.
