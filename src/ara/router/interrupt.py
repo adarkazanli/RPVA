@@ -282,6 +282,11 @@ class InterruptManager:
         self._interrupt_audio = b""
         self._state = InterruptState.RESPONDING
 
+        # Ensure capture is stopped before starting monitor thread
+        if getattr(self._capture, 'is_active', False):
+            self._capture.stop()
+            time.sleep(0.1)  # Allow PyAudio to settle
+
         self._monitor_thread = threading.Thread(
             target=self._monitor_for_interrupt,
             daemon=True,
@@ -297,6 +302,8 @@ class InterruptManager:
 
     def _monitor_for_interrupt(self) -> None:
         """Background thread to detect speech during playback."""
+        # Small delay to avoid PyAudio segfault from rapid operations
+        time.sleep(0.05)
         self._capture.start()
         try:
             for chunk in self._capture.stream():

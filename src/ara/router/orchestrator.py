@@ -2760,6 +2760,10 @@ class Orchestrator:
         logger.info("Continuation window started (5s)")
 
         # Monitor for speech within the window
+        # Ensure capture is stopped and add delay to avoid PyAudio segfault
+        if getattr(self._capture, 'is_active', False):
+            self._capture.stop()
+        time.sleep(0.1)  # Allow PyAudio to settle
         self._capture.start()
         try:
             window_start = time.time()
