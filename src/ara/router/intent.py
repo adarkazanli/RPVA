@@ -174,6 +174,9 @@ class IntentClassifier:
         r"(?:what(?:'s|'s|\s+is)\s+)?(?:the\s+)?weather\s+(?:like\s+)?(?:in|at|for)\s+(.+)",
         r"(?:what(?:'s|'s|\s+is)\s+)?(?:the\s+)?(?:current\s+)?(?:weather|temperature|forecast)\s+(?:in|at|for)\s+(.+)",
         r"(?:how(?:'s|'s|\s+is)\s+)?(?:the\s+)?weather\s+(?:in|at|for)?\s*(.+)",
+        # "what's it like outside" patterns
+        r"(?:what(?:'s|'s|\s+is)\s+)?it\s+like\s+outside\s+(?:in|at)\s+(.+)",
+        r"(?:how(?:'s|'s|\s+is)\s+)?it\s+outside\s+(?:in|at)\s+(.+)",
         # Sports patterns
         r"(?:what(?:'s|'s|\s+is)\s+)?(?:the\s+)?(?:latest|recent)\s+(?:sports?|scores?)\s+(?:news)?(?:\s+(?:about|on|for)\s+(.+))?",
         r"(?:who\s+won|score\s+of)\s+(?:the\s+)?(.+)\s+game",
