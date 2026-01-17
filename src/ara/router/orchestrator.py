@@ -442,7 +442,11 @@ class Orchestrator:
 
             # Step 5: Handle intent (command or LLM)
             response_start = time.time()
-            response_text = self._handle_intent(intent, interaction_id)
+            self._start_thinking_indicator()
+            try:
+                response_text = self._handle_intent(intent, interaction_id)
+            finally:
+                self._stop_thinking_indicator()
             latencies["llm_ms"] = int((time.time() - response_start) * 1000)
             logger.info(f"Response: '{response_text[:50]}...'")
 
@@ -551,6 +555,41 @@ class Orchestrator:
                             else:
                                 transcript = interrupt_text
                                 response_text = clarification
+                        elif self._is_implicit_follow_up(interrupt_text):
+                            # Looks like a follow-up question - treat as implicit "wait" + question
+                            logger.info(f"Follow-up interrupt detected: '{interrupt_text}'")
+
+                            # Add to buffer and reprocess with context
+                            self._interrupt_manager.request_buffer.append(
+                                interrupt_text, is_interrupt=True
+                            )
+                            combined_request = self._interrupt_manager.get_combined_request()
+                            logger.info(f"Follow-up combined: '{combined_request}'")
+                            _log_interaction_timing("captured", combined_request)
+
+                            combined_intent = self._intent_classifier.classify(combined_request)
+                            self._start_thinking_indicator()
+                            try:
+                                combined_response = self._handle_intent(
+                                    combined_intent, interaction_id
+                                )
+                            finally:
+                                self._stop_thinking_indicator()
+                            _log_interaction_timing("responded", combined_response)
+
+                            # Update last response for follow-up context
+                            self._last_response = combined_response
+                            self._last_response_timestamp = datetime.now(UTC)
+
+                            if self._synthesizer:
+                                combined_synth = self._synthesizer.synthesize(combined_response)
+                                self._playback.play(
+                                    combined_synth.audio, combined_synth.sample_rate
+                                )
+
+                            transcript = combined_request
+                            response_text = combined_response
+                            intent = combined_intent
                         else:
                             # Not a recognized interrupt keyword - ignore (likely noise)
                             logger.info(f"Ignoring non-keyword interrupt: '{interrupt_text}'")
@@ -897,11 +936,7 @@ class Orchestrator:
 
         # Fallback to LLM with caveat (if enabled in routing decision)
         if routing_decision.fallback_source == DataSource.LLM and self._llm:
-            self._start_thinking_indicator()
-            try:
-                llm_response = self._llm.generate(intent.raw_text)
-            finally:
-                self._stop_thinking_indicator()
+            llm_response = self._llm.generate(intent.raw_text)
             response_text = llm_response.text.strip()
 
             # Add caveat prefix if routing decision says we should
@@ -947,13 +982,7 @@ class Orchestrator:
         # Combine context with user query
         query_with_context = f"{context}\n\nUser: {intent.raw_text}"
 
-        # Play thinking indicator while waiting for LLM
-        self._start_thinking_indicator()
-        try:
-            llm_response = self._llm.generate(query_with_context)
-        finally:
-            self._stop_thinking_indicator()
-
+        llm_response = self._llm.generate(query_with_context)
         return llm_response.text.strip()
 
     def _handle_timer_set(self, intent: Intent, interaction_id: uuid.UUID) -> str:
@@ -1514,11 +1543,7 @@ class Orchestrator:
                     return "I couldn't search for that right now."
                 # Fall back to LLM
                 logger.info("Falling back to LLM for response")
-                self._start_thinking_indicator()
-                try:
-                    llm_response = self._llm.generate(intent.raw_text)
-                finally:
-                    self._stop_thinking_indicator()
+                llm_response = self._llm.generate(intent.raw_text)
                 return llm_response.text.strip()
 
             # Log what we got back
@@ -1596,11 +1621,7 @@ class Orchestrator:
                 return "I encountered an error while searching."
             # Fall back to LLM
             logger.info("Falling back to LLM due to exception")
-            self._start_thinking_indicator()
-            try:
-                llm_response = self._llm.generate(intent.raw_text)
-            finally:
-                self._stop_thinking_indicator()
+            llm_response = self._llm.generate(intent.raw_text)
             return llm_response.text.strip()
 
     def _handle_system_command(self, intent: Intent) -> str:
