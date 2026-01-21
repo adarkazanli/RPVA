@@ -14,8 +14,10 @@ logger = logging.getLogger(__name__)
 
 # Check for elevenlabs availability
 ELEVENLABS_AVAILABLE = False
+VoiceSettings = None
 try:
     from elevenlabs import ElevenLabs
+    from elevenlabs.types import VoiceSettings
 
     ELEVENLABS_AVAILABLE = True
 except ImportError:
@@ -53,8 +55,8 @@ class ElevenLabsSynthesizer:
     emotion detection based on response context.
     """
 
-    # Default voice - Rachel (warm, natural female voice)
-    DEFAULT_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"  # Rachel
+    # Default voice - Bella (soft, gentle female voice)
+    DEFAULT_VOICE_ID = "EXAVITQu4vr4xnSDxMaL"  # Bella
     DEFAULT_MODEL = "eleven_multilingual_v2"
     TARGET_SAMPLE_RATE = 22050
 
@@ -138,6 +140,18 @@ class ElevenLabsSynthesizer:
         emotion_cue = EMOTION_CUES.get(emotion, "")
 
         try:
+            # Voice settings for natural, expressive speech
+            # - stability: Lower = more expressive variation (0.3-0.5 ideal)
+            # - similarity_boost: How closely to match original voice
+            # - style: Exaggeration of style (adds expressiveness)
+            # - use_speaker_boost: Enhances voice clarity
+            voice_settings = VoiceSettings(
+                stability=0.4,  # Lower for more natural variation
+                similarity_boost=0.75,
+                style=0.3,  # Add some style/expressiveness
+                use_speaker_boost=True,
+            )
+
             # Generate audio using ElevenLabs API
             audio_generator = self._client.text_to_speech.convert(
                 text=text,
@@ -145,6 +159,7 @@ class ElevenLabsSynthesizer:
                 model_id=self._model,
                 output_format="pcm_22050",  # 22050 Hz 16-bit PCM
                 next_text=emotion_cue if emotion_cue else None,
+                voice_settings=voice_settings,
             )
 
             # Collect audio bytes from generator

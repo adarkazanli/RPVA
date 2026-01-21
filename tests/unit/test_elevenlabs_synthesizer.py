@@ -58,10 +58,10 @@ class TestElevenLabsSynthesizer:
             assert not synth.is_available
 
     def test_default_voice_id(self) -> None:
-        """Test default voice ID is Rachel."""
+        """Test default voice ID is Bella."""
         from ara.tts.elevenlabs import ElevenLabsSynthesizer
 
-        assert ElevenLabsSynthesizer.DEFAULT_VOICE_ID == "21m00Tcm4TlvDq8ikWAM"
+        assert ElevenLabsSynthesizer.DEFAULT_VOICE_ID == "EXAVITQu4vr4xnSDxMaL"
 
     def test_default_model(self) -> None:
         """Test default model is multilingual v2."""
