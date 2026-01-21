@@ -1,6 +1,7 @@
 """Text-to-speech module for Ara Voice Assistant.
 
-Provides platform-adaptive speech synthesis:
+Provides platform-adaptive speech synthesis with optional emotional TTS:
+- ElevenLabs: High-quality emotional TTS (if API key configured)
 - macOS: Native TTS with "Samantha" voice
 - Raspberry Pi: Piper TTS with neural voice
 - Other: Falls back to Mock synthesizer
@@ -22,10 +23,12 @@ logger = logging.getLogger(__name__)
 def create_synthesizer(
     config: "TTSConfig | None" = None,
     use_mock: bool = False,
+    use_elevenlabs: bool | None = None,
 ) -> Synthesizer:
     """Create the appropriate synthesizer for the current platform.
 
     Automatically detects the platform and selects the optimal TTS engine:
+    - ElevenLabs: If API key configured and use_elevenlabs is True/None
     - macOS: MacOSSynthesizer with "Samantha" voice
     - Raspberry Pi: PiperSynthesizer with neural voice
     - Other: PiperSynthesizer or MockSynthesizer fallback
@@ -33,6 +36,8 @@ def create_synthesizer(
     Args:
         config: TTS configuration (optional)
         use_mock: If True, force mock synthesizer for testing
+        use_elevenlabs: If True, prefer ElevenLabs; if False, skip it;
+                       if None (default), use if available
 
     Returns:
         Synthesizer implementation appropriate for the platform.
@@ -52,6 +57,23 @@ def create_synthesizer(
     if config is not None:
         voice = config.voice
         speed = config.speed
+
+    # Try ElevenLabs first if not explicitly disabled
+    if use_elevenlabs is not False:
+        try:
+            from .elevenlabs import ELEVENLABS_AVAILABLE, ElevenLabsSynthesizer
+
+            if ELEVENLABS_AVAILABLE:
+                synth = ElevenLabsSynthesizer()
+                if synth.is_available:
+                    logger.info("TTS: Using ElevenLabsSynthesizer (emotional TTS)")
+                    return synth
+                elif use_elevenlabs is True:
+                    logger.warning("TTS: ElevenLabs requested but not available")
+        except Exception as e:
+            logger.warning(f"TTS: ElevenLabsSynthesizer failed to initialize: {e}")
+            if use_elevenlabs is True:
+                raise
 
     # Platform-specific selection
     if platform == Platform.MACOS:
