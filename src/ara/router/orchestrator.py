@@ -450,11 +450,19 @@ class Orchestrator:
 
             # Step 5: Handle intent (command or LLM)
             response_start = time.time()
-            self._start_thinking_indicator()
+            # Claude intents have their own waiting indicator - skip thinking indicator
+            is_claude_intent = intent.type in (
+                IntentType.CLAUDE_QUERY,
+                IntentType.CLAUDE_SUMMARY,
+                IntentType.CLAUDE_RESET,
+            )
+            if not is_claude_intent:
+                self._start_thinking_indicator()
             try:
                 response_text = self._handle_intent(intent, interaction_id)
             finally:
-                self._stop_thinking_indicator()
+                if not is_claude_intent:
+                    self._stop_thinking_indicator()
             latencies["llm_ms"] = int((time.time() - response_start) * 1000)
             logger.info(f"Response: '{response_text[:50]}...'")
 
@@ -576,13 +584,21 @@ class Orchestrator:
                             _log_interaction_timing("captured", combined_request)
 
                             combined_intent = self._intent_classifier.classify(combined_request)
-                            self._start_thinking_indicator()
+                            # Claude intents have their own waiting indicator
+                            is_claude_intent = combined_intent.type in (
+                                IntentType.CLAUDE_QUERY,
+                                IntentType.CLAUDE_SUMMARY,
+                                IntentType.CLAUDE_RESET,
+                            )
+                            if not is_claude_intent:
+                                self._start_thinking_indicator()
                             try:
                                 combined_response = self._handle_intent(
                                     combined_intent, interaction_id
                                 )
                             finally:
-                                self._stop_thinking_indicator()
+                                if not is_claude_intent:
+                                    self._stop_thinking_indicator()
                             _log_interaction_timing("responded", combined_response)
 
                             # Update last response for follow-up context
@@ -656,11 +672,19 @@ class Orchestrator:
 
                         # Classify and handle follow-up with thinking indicator
                         follow_up_intent = self._intent_classifier.classify(follow_up_text)
-                        self._start_thinking_indicator()
+                        # Claude intents have their own waiting indicator
+                        is_claude_intent = follow_up_intent.type in (
+                            IntentType.CLAUDE_QUERY,
+                            IntentType.CLAUDE_SUMMARY,
+                            IntentType.CLAUDE_RESET,
+                        )
+                        if not is_claude_intent:
+                            self._start_thinking_indicator()
                         try:
                             follow_up_response = self._handle_intent(follow_up_intent, interaction_id)
                         finally:
-                            self._stop_thinking_indicator()
+                            if not is_claude_intent:
+                                self._stop_thinking_indicator()
                         _log_interaction_timing("responded", follow_up_response)
 
                         # Update last response for follow-up context
@@ -3165,12 +3189,20 @@ class Orchestrator:
                 combined_intent = self._intent_classifier.classify(combined_request)
                 logger.info(f"Continuation intent: {combined_intent.type.value}")
 
-                # Play thinking indicator while processing
-                self._start_thinking_indicator()
+                # Claude intents have their own waiting indicator
+                is_claude_intent = combined_intent.type in (
+                    IntentType.CLAUDE_QUERY,
+                    IntentType.CLAUDE_SUMMARY,
+                    IntentType.CLAUDE_RESET,
+                )
+                # Play thinking indicator while processing (except Claude intents)
+                if not is_claude_intent:
+                    self._start_thinking_indicator()
                 try:
                     combined_response = self._handle_intent(combined_intent, interaction_id)
                 finally:
-                    self._stop_thinking_indicator()
+                    if not is_claude_intent:
+                        self._stop_thinking_indicator()
                 _log_interaction_timing("responded", combined_response)
 
                 # Update last response for follow-up context
