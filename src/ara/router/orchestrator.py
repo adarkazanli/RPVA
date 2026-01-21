@@ -436,8 +436,6 @@ class Orchestrator:
             # Step 4: Classify intent (or force NOTE_CAPTURE for note mode)
             if is_note_mode:
                 # Force note capture intent for note-taking mode
-                from .intent import Intent, IntentType
-
                 intent = Intent(
                     type=IntentType.NOTE_CAPTURE,
                     confidence=1.0,
