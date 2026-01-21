@@ -246,6 +246,7 @@ class Orchestrator:
         self._note_max_recording_ms = 180000  # 3 minute max for notes
         self._note_trigger_phrases = ["take note", "take a note", "note that", "remember that"]
         self._stop_keyword = "porcupine"  # Say wake word to end note recording early
+        self._note_stop_phrase = "done ara"  # Phrase to end continuous note recording
 
         # Load personality configuration
         self._personality = get_default_personality()
@@ -410,25 +411,27 @@ class Orchestrator:
 
             # Step 2: Record user speech with mode detection
             stt_start = time.time()
-            audio_data, is_note_mode = self._record_with_mode_detection()
+            result, is_note_mode = self._record_with_mode_detection()
 
-            if not audio_data:
+            if not result:
                 logger.warning("No speech detected")
                 return None
 
-            # Step 3: Transcribe speech (full audio for note mode)
-            transcript_result = self._transcriber.transcribe(audio_data, 16000)
-            transcript = transcript_result.text.strip()
+            # Step 3: Transcribe speech (note mode returns transcript directly)
+            if is_note_mode:
+                # Note mode: result is already a transcript string
+                transcript = result if isinstance(result, str) else ""
+                if not transcript:
+                    # User timed out without saying anything
+                    transcript = ""
+            else:
+                # Normal mode: result is audio bytes, need to transcribe
+                audio_data = result
+                transcript_result = self._transcriber.transcribe(audio_data, 16000)
+                transcript = transcript_result.text.strip()
 
             # Clean transcript (remove wake word, garbled segments from Whisper)
             transcript = self._clean_transcript(transcript)
-
-            # Strip stop keyword if present (case-insensitive) - only for note mode
-            if is_note_mode and transcript.lower().endswith(self._stop_keyword):
-                transcript = transcript[: -len(self._stop_keyword)].strip()
-                # Also handle punctuation before the keyword
-                transcript = transcript.rstrip(".,;:!?")
-                logger.info("Stop keyword detected, stripped from transcript")
 
             if not transcript:
                 logger.warning("Empty transcription")
@@ -2065,32 +2068,22 @@ class Orchestrator:
     def _build_note_response(self, action_items: list[str]) -> str:
         """Build confirmation response for note capture.
 
+        8a.7: Concise confirmation with action item count.
+
         Args:
             action_items: List of extracted action items.
 
         Returns:
-            Response string with action items mentioned.
+            Brief response suitable for voice output.
         """
-        name = self._user_name or ""
-        greeting = f"Got it{', ' + name if name else ''}!"
+        count = len(action_items)
 
-        if not action_items:
-            return f"{greeting} Noted."
-
-        # Format action items for speech
-        if len(action_items) == 1:
-            return f"{greeting} Noted. I'll add '{action_items[0]}' to your action items for today."
-        elif len(action_items) == 2:
-            return (
-                f"{greeting} Noted. I'll add '{action_items[0]}' and "
-                f"'{action_items[1]}' to your action items."
-            )
+        if count == 0:
+            return "Noted."
+        elif count == 1:
+            return "Noted. 1 action item saved."
         else:
-            # Multiple items - summarize
-            return (
-                f"{greeting} Noted. I found {len(action_items)} action items "
-                f"including '{action_items[0]}'. All added to your list."
-            )
+            return f"Noted. {count} action items saved."
 
     def _handle_note_query(self, intent: Intent) -> str:
         """Handle note query intent ('what did I discuss with...').
@@ -3096,6 +3089,62 @@ class Orchestrator:
         text_lower = text.lower().strip()
         return any(text_lower.startswith(phrase) for phrase in self._note_trigger_phrases)
 
+    def _contains_stop_phrase(self, transcript: str) -> bool:
+        """Check if transcript contains 'Done Ara' stop phrase.
+
+        Args:
+            transcript: Text to check for stop phrase
+
+        Returns:
+            True if stop phrase detected
+        """
+        # Match "done ara" and common misheard variants
+        pattern = r"\b(done|dan|dawn)\s*(ara|aura|era)\b"
+        return bool(re.search(pattern, transcript, flags=re.IGNORECASE))
+
+    def _strip_stop_phrase(self, transcript: str) -> str:
+        """Remove 'Done Ara' stop phrase from transcript.
+
+        Args:
+            transcript: Text potentially containing stop phrase
+
+        Returns:
+            Transcript with stop phrase removed
+        """
+        # Case-insensitive removal of "done ara" and variants
+        cleaned = re.sub(
+            r"\b(done|dan|dawn)\s*(ara|aura|era)\b[.,!?]*",
+            "",
+            transcript,
+            flags=re.IGNORECASE,
+        )
+        return cleaned.strip()
+
+    def _extract_note_content(self, transcript: str) -> str:
+        """Extract note content from trigger phrase.
+
+        Examples:
+            'take a note that I need to call John' → 'I need to call John'
+            'remember to buy groceries' → 'to buy groceries'
+
+        Args:
+            transcript: Full transcript including trigger phrase
+
+        Returns:
+            Content portion after trigger phrase
+        """
+        # Remove trigger phrases, keep the content
+        patterns = [
+            r"^(?:take\s+a?\s*note\s*(?:that\s+)?)",
+            r"^(?:note\s+that\s+)",
+            r"^(?:remember\s+(?:that\s+)?)",
+            r"^(?:memo\s*(?:that\s+)?)",
+        ]
+        text = transcript
+        for pattern in patterns:
+            text = re.sub(pattern, "", text, flags=re.IGNORECASE)
+        return text.strip()
+
     def _is_implicit_follow_up(self, text: str) -> bool:
         """Detect if text references previous response without explicit context.
 
@@ -3142,14 +3191,90 @@ class Orchestrator:
             self._thinking_thread.join(timeout=0.5)
             self._thinking_thread = None
 
-    def _record_with_mode_detection(self) -> tuple[bytes, bool]:
+    def _record_continuous_notes(self, initial_content: str = "") -> str:
+        """Record continuous notes until 'Done Ara' is heard.
+
+        Implements the 8a Note Capture Flow:
+        1. Say "Ready" confirmation
+        2. Loop: Record → Transcribe → Check for "Done Ara"
+        3. Accumulate transcripts (silent, no beeps)
+        4. Return combined transcript when done
+
+        Args:
+            initial_content: Content from trigger phrase to include
+
+        Returns:
+            Combined transcript from all recording segments
+        """
+        # 8a.1: Say "Ready"
+        ready_audio = self._synthesizer.synthesize("Ready")
+        self._playback.play(ready_audio.audio, ready_audio.sample_rate)
+
+        transcripts: list[str] = []
+        if initial_content:
+            transcripts.append(initial_content)
+
+        consecutive_silence = 0
+        max_silence_attempts = 6  # 6 x 5s = 30s timeout
+        start_time = time.time()
+        max_session_duration = 600  # 10 min max total
+
+        while True:
+            # Check total session duration
+            if time.time() - start_time > max_session_duration:
+                logger.info("Note session max duration reached (10 min)")
+                break
+
+            # 8a.2: Record speech segment (silent, no beeps)
+            audio = self._record_speech(
+                silence_timeout_ms=5000,  # 5s silence = end of utterance
+                max_recording_ms=60000,  # 1 min max per segment
+            )
+
+            if not audio:
+                consecutive_silence += 1
+                if consecutive_silence >= max_silence_attempts:
+                    logger.info("Note session timeout - 30s of silence")
+                    break
+                continue
+
+            consecutive_silence = 0  # Reset on speech
+
+            # 8a.3: Transcribe to check for stop phrase
+            result = self._transcriber.transcribe(audio, 16000)
+            transcript = result.text.strip() if result else ""
+
+            if not transcript:
+                continue
+
+            # Check for "Done Ara" stop phrase
+            if self._contains_stop_phrase(transcript):
+                # Strip the stop phrase from final transcript
+                transcript = self._strip_stop_phrase(transcript)
+                if transcript:
+                    transcripts.append(transcript)
+                logger.info("Stop phrase detected, ending note session")
+                break
+
+            # Accumulate transcript (no beep - silent recording)
+            transcripts.append(transcript)
+            logger.debug(f"Note segment captured: {transcript[:50]}...")
+
+        # 8a.4: Return combined transcript
+        if not transcripts:
+            return ""
+        return " ".join(transcripts)
+
+    def _record_with_mode_detection(self) -> tuple[bytes | str, bool]:
         """Record speech with automatic note-taking mode detection.
 
         Does a quick initial recording to detect if user wants to take a note.
-        If note-taking detected, continues with extended recording settings.
+        If note-taking detected, uses continuous recording until "Done Ara".
 
         Returns:
-            Tuple of (audio_bytes, is_note_mode)
+            Tuple of (audio_bytes | transcript_str, is_note_mode)
+            - Normal mode: (audio_bytes, False)
+            - Note mode: (transcript_str, True) - already transcribed
         """
         if not self._capture or not self._transcriber:
             return b"", False
@@ -3173,19 +3298,22 @@ class Orchestrator:
 
         # Check if note-taking mode
         if self._is_note_trigger(initial_text):
-            logger.info("Note-taking mode detected, extending recording...")
-            logger.info("Say the wake word (e.g., 'porcupine') when done to end early")
+            logger.info("Note-taking mode detected, starting continuous recording...")
+            logger.info("Say 'Done Ara' when finished to end note session")
 
-            # Phase 2: Continue with extended recording (wake word stops recording)
-            extended_audio = self._record_speech(
-                silence_timeout_ms=self._note_silence_timeout_ms,
-                max_recording_ms=self._note_max_recording_ms,
-                stop_on_wake_word=True,
-            )
+            # Extract content from trigger phrase
+            # "take a note that I need to call John" → "I need to call John"
+            initial_content = self._extract_note_content(initial_text)
 
-            # Combine audio
-            combined_audio = initial_audio + extended_audio
-            return combined_audio, True
+            # Phase 2: Continuous recording loop until "Done Ara"
+            combined_transcript = self._record_continuous_notes(initial_content)
+
+            if not combined_transcript:
+                # User said nothing after "Ready" or timed out
+                return "", True  # Will result in "Nothing captured" response
+
+            # Return transcript directly (already transcribed in loop)
+            return combined_transcript, True
 
         # Not note-taking mode, return initial recording
         return initial_audio, False
