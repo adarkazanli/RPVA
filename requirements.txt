@@ -20,6 +20,7 @@ anthropic>=0.76.0
 
 # Text-to-Speech
 piper-tts>=1.2.0
+elevenlabs>=1.0.0  # Optional: emotional TTS
 
 # Search (optional internet features)
 ddgs>=9.0.0

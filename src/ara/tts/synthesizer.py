@@ -30,6 +30,15 @@ class Synthesizer(Protocol):
     Implementations convert text to speech audio.
     """
 
+    @property
+    def is_available(self) -> bool:
+        """Check if the synthesizer is ready to use.
+
+        Returns:
+            True if synthesize() will succeed, False otherwise.
+        """
+        ...
+
     def synthesize(self, text: str) -> SynthesisResult:
         """Convert text to speech audio.
 

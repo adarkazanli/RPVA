@@ -102,3 +102,90 @@ class TestCreateSynthesizer:
         synth = create_synthesizer(config=config, use_mock=True)
 
         assert isinstance(synth, MockSynthesizer)
+
+
+class TestFallbackChain:
+    """Test fallback chain in create_synthesizer (US3)."""
+
+    def test_macos_fallback_to_mock_when_all_unavailable(self) -> None:
+        """Should fall back to Mock when macOS and Piper unavailable."""
+        from unittest.mock import patch
+
+        from ara.tts.platform import Platform
+
+        with (
+            patch("ara.tts.detect_platform", return_value=Platform.MACOS),
+            patch("shutil.which", return_value=None),  # say not available
+            patch("ara.tts.piper.PIPER_AVAILABLE", False),  # Piper not available
+        ):
+            synth = create_synthesizer()
+            # Should fall back to Mock since both macOS and Piper unavailable
+            assert isinstance(synth, MockSynthesizer)
+
+    def test_raspberry_pi_fallback_to_mock(self) -> None:
+        """Should fall back to Mock when Piper unavailable on Pi."""
+        from unittest.mock import patch
+
+        from ara.tts.platform import Platform
+
+        with (
+            patch("ara.tts.detect_platform", return_value=Platform.RASPBERRY_PI),
+            patch("ara.tts.piper.PIPER_AVAILABLE", False),
+        ):
+            synth = create_synthesizer()
+            assert isinstance(synth, MockSynthesizer)
+
+    def test_other_platform_fallback_to_mock(self) -> None:
+        """Should fall back to Mock on other platforms when Piper unavailable."""
+        from unittest.mock import patch
+
+        from ara.tts.platform import Platform
+
+        with (
+            patch("ara.tts.detect_platform", return_value=Platform.OTHER),
+            patch("ara.tts.piper.PIPER_AVAILABLE", False),
+        ):
+            synth = create_synthesizer()
+            assert isinstance(synth, MockSynthesizer)
+
+    def test_never_returns_none(self) -> None:
+        """create_synthesizer should never return None."""
+        from unittest.mock import patch
+
+        from ara.tts.platform import Platform
+
+        # Even with all TTS engines failing
+        with (
+            patch("ara.tts.detect_platform", return_value=Platform.OTHER),
+            patch("ara.tts.piper.PIPER_AVAILABLE", False),
+        ):
+            synth = create_synthesizer()
+            assert synth is not None
+
+    def test_mock_always_available_as_final_fallback(self) -> None:
+        """MockSynthesizer should always be available as final fallback."""
+        mock = MockSynthesizer()
+        assert mock.is_available is True
+
+    def test_use_mock_bypasses_detection(self) -> None:
+        """use_mock=True should bypass platform detection entirely."""
+        synth = create_synthesizer(use_mock=True)
+        assert isinstance(synth, MockSynthesizer)
+
+
+class TestExceptionHandling:
+    """Test exception handling in create_synthesizer (US3)."""
+
+    def test_handles_piper_init_exception(self) -> None:
+        """Should handle exceptions during PiperSynthesizer initialization."""
+        from unittest.mock import patch
+
+        from ara.tts.platform import Platform
+
+        with (
+            patch("ara.tts.detect_platform", return_value=Platform.RASPBERRY_PI),
+            patch("ara.tts.piper.PiperSynthesizer", side_effect=Exception("Init failed")),
+        ):
+            synth = create_synthesizer()
+            # Should fall back to Mock
+            assert isinstance(synth, MockSynthesizer)
