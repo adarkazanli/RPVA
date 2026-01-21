@@ -283,9 +283,7 @@ def main() -> int:
                 # Initialize Claude storage for Claude query mode
                 from .storage.claude_repository import ClaudeRepository
 
-                claude_repo = ClaudeRepository(
-                    mongo_client.database["claude_interactions"]
-                )
+                claude_repo = ClaudeRepository(mongo_client.database)
                 orchestrator.set_claude_storage(claude_repo)
                 logger.info("Claude storage configured")
             else:
