@@ -45,7 +45,7 @@ from ..digest.insights import InsightGenerator
 from ..digest.weekly import WeeklyDigestGenerator
 from ..feedback import FeedbackType
 from ..notes.categorizer import categorize
-from ..search import create_search_client
+from ..search import PerplexitySearch, create_perplexity_search, create_search_client
 from .intent import Intent, IntentClassifier, IntentType
 from .interrupt import InterruptManager
 from .query_router import (
@@ -273,6 +273,13 @@ class Orchestrator:
         self._search_client = create_search_client()
         search_client_type = type(self._search_client).__name__
         logger.info(f"Search client initialized: {search_client_type}")
+
+        # Initialize Perplexity search client (optional - only if API key available)
+        self._perplexity_client: PerplexitySearch | None = create_perplexity_search()
+        if self._perplexity_client:
+            logger.info("Perplexity search client initialized")
+        else:
+            logger.debug("Perplexity search not available (no API key)")
 
         # Initialize interrupt manager for speech interrupt handling
         self._interrupt_manager: InterruptManager | None = None
@@ -863,6 +870,8 @@ class Orchestrator:
             return self._handle_reminder_time_left(intent)
         elif intent.type == IntentType.HISTORY_QUERY:
             return self._handle_history_query(intent)
+        elif intent.type == IntentType.PERPLEXITY_SEARCH:
+            return self._handle_perplexity_search(intent)
         elif intent.type == IntentType.WEB_SEARCH:
             return self._handle_web_search(intent)
         elif intent.type == IntentType.SYSTEM_COMMAND:
@@ -1612,6 +1621,54 @@ class Orchestrator:
                 result_lines.append(f"  {i}. {content}")
 
             return " ".join(result_lines)
+
+    def _handle_perplexity_search(self, intent: Intent) -> str:
+        """Handle Perplexity search intent.
+
+        Performs a search using Perplexity API for AI-powered web search.
+        Falls back to regular web search if Perplexity is not configured.
+
+        Args:
+            intent: Classified Perplexity search intent.
+
+        Returns:
+            Response text with search results.
+        """
+        query = intent.entities.get("query", intent.raw_text.strip())
+        query = query.rstrip("?!.")
+
+        logger.info(f"Perplexity search query: '{query}'")
+
+        # Check if Perplexity is available
+        if not self._perplexity_client or not self._perplexity_client.is_available:
+            # Friendly message explaining Perplexity isn't set up
+            logger.info("Perplexity not configured, suggesting web search fallback")
+            return (
+                "Perplexity search isn't set up yet. "
+                "I can search the web for you instead if you'd like - just say 'search for' "
+                "followed by what you're looking for."
+            )
+
+        try:
+            result = self._perplexity_client.search(query)
+
+            if not result.success:
+                logger.warning(f"Perplexity search failed: {result.error}")
+                return (
+                    "I couldn't complete the Perplexity search. "
+                    "Would you like me to try a regular web search instead?"
+                )
+
+            if result.answer:
+                # Add greeting and date context
+                greeting = f"{self._user_name}, " if self._user_name else ""
+                return f"{greeting}{result.answer}"
+
+            return "I couldn't find a good answer from Perplexity. Try a regular web search?"
+
+        except Exception as e:
+            logger.error(f"Perplexity search error: {e}")
+            return "Something went wrong with Perplexity search. Try again later?"
 
     def _handle_web_search(self, intent: Intent) -> str:
         """Handle web search intent.

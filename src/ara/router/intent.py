@@ -45,6 +45,8 @@ class IntentType(Enum):
     CLAUDE_QUERY = "claude_query"  # "ask Claude X"
     CLAUDE_SUMMARY = "claude_summary"  # "summarize my Claude conversations"
     CLAUDE_RESET = "claude_reset"  # "new conversation" (during Claude mode)
+    # Perplexity search intent
+    PERPLEXITY_SEARCH = "perplexity_search"  # "ask Perplexity...", "search with Perplexity..."
     UNKNOWN = "unknown"
 
 
@@ -470,6 +472,14 @@ class IntentClassifier:
         r"^(?:let'?s\s+)?start\s+(?:a\s+)?new\s+(?:conversation|chat)$",
     ]
 
+    # Perplexity search patterns
+    # "ask Perplexity...", "search with Perplexity..."
+    PERPLEXITY_SEARCH_PATTERNS = [
+        r"(?:ask|search\s+with|use)\s+perplexity\s+(?:to\s+)?(?:search\s+)?(?:for\s+)?(.+)",
+        r"perplexity[,:\s]+(?:search\s+)?(?:for\s+)?(.+)",
+        r"(?:search|look\s+up)\s+(?:on|with|using)\s+perplexity\s+(?:for\s+)?(.+)",
+    ]
+
     def __init__(self) -> None:
         """Initialize the classifier."""
         # Pre-compile patterns for efficiency
@@ -528,6 +538,10 @@ class IntentClassifier:
         self._claude_reset = [
             re.compile(p, re.IGNORECASE) for p in self.CLAUDE_RESET_PATTERNS
         ]
+        # Perplexity search patterns
+        self._perplexity_search = [
+            re.compile(p, re.IGNORECASE) for p in self.PERPLEXITY_SEARCH_PATTERNS
+        ]
 
     def classify(self, text: str) -> Intent:
         """Classify the given text into an intent.
@@ -585,6 +599,10 @@ class IntentClassifier:
 
         # History query
         if intent := self._try_history_query(text):
+            return intent
+
+        # Perplexity search (check before general web search)
+        if intent := self._try_perplexity_search(text):
             return intent
 
         # Web search
@@ -827,6 +845,29 @@ class IntentClassifier:
                 return Intent(
                     type=IntentType.HISTORY_QUERY,
                     confidence=0.85,
+                    entities=entities,
+                    raw_text=text,
+                )
+        return None
+
+    def _try_perplexity_search(self, text: str) -> Intent | None:
+        """Try to match Perplexity search patterns.
+
+        Examples: "ask Perplexity what is X", "search with Perplexity for Y"
+        """
+        for pattern in self._perplexity_search:
+            match = pattern.search(text)
+            if match:
+                entities = {}
+                groups = match.groups()
+                if groups and groups[0]:
+                    entities["query"] = groups[0].strip().rstrip("?.,!")
+                else:
+                    entities["query"] = text
+
+                return Intent(
+                    type=IntentType.PERPLEXITY_SEARCH,
+                    confidence=0.95,
                     entities=entities,
                     raw_text=text,
                 )
