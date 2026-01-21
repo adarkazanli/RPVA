@@ -441,9 +441,12 @@ class IntentClassifier:
     # Claude query patterns (009-claude-query-mode)
     # "ask Claude X", "hey Claude, X", "Claude, X"
     CLAUDE_QUERY_PATTERNS = [
-        r"ask\s+claud[e]?\s+(?:to\s+)?(.+)",  # "ask Claude what is X", "ask claud" (mishearing)
-        r"hey\s+claude[,\s]+(.+)",  # "hey Claude, what is X"
-        r"claude[,\s]+(?:tell\s+me\s+)?(.+)",  # "Claude, tell me about X"
+        r"ask\s+(?:claud[e]?|cloud)\s+(?:to\s+)?(.+)",  # "ask Claude/cloud what is X"
+        r"hey\s+(?:claude|cloud)[,\s]+(.+)",  # "hey Claude/cloud, what is X"
+        r"(?:claude|cloud)[,\s]+(?:tell\s+me\s+)?(.+)",  # "Claude/cloud, tell me about X"
+        r"tell\s+(?:claude|cloud)\s+(.+)",  # "tell Claude/cloud that..."
+        r"have\s+(?:claude|cloud)\s+(.+)",  # "have Claude/cloud explain..."
+        r"get\s+(?:claude|cloud)(?:'s)?\s+(?:opinion|thoughts?|take)\s+(?:on\s+)?(.+)",  # "get Claude's opinion on"
     ]
 
     # Claude summary patterns (009-claude-query-mode)
