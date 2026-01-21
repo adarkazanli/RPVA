@@ -703,6 +703,40 @@ class Orchestrator:
                         transcript = f"{transcript} | {follow_up_text}"
                         response_text = f"{response_text} | {follow_up_response}"
 
+            # Step 9: "Anything else?" continuation loop (skip for note mode)
+            if not is_note_mode:
+                # Track if we're in a Claude conversation for continuation
+                was_claude = intent.type in (
+                    IntentType.CLAUDE_QUERY,
+                    IntentType.CLAUDE_SUMMARY,
+                )
+
+                # Loop to handle multiple follow-up questions
+                while True:
+                    anything_else_result = self._handle_anything_else(
+                        interaction_id, was_claude_intent=was_claude
+                    )
+
+                    if anything_else_result is None:
+                        # User declined or no response - end conversation
+                        break
+
+                    # User had a follow-up question
+                    followup_transcript, followup_response, followup_intent = anything_else_result
+
+                    # Update tracking
+                    transcript = f"{transcript} | {followup_transcript}"
+                    response_text = f"{response_text} | {followup_response}"
+                    intent = followup_intent
+
+                    # Update Claude tracking for next iteration
+                    was_claude = followup_intent.type in (
+                        IntentType.CLAUDE_QUERY,
+                        IntentType.CLAUDE_SUMMARY,
+                    )
+
+                    logger.info("Handled 'anything else' follow-up, checking again...")
+
             total_latency = int((time.time() - start_time) * 1000)
 
             logger.info(
@@ -3294,6 +3328,179 @@ class Orchestrator:
         rms = (sum_squares / num_samples) ** 0.5
 
         return float(rms)
+
+    def _handle_anything_else(
+        self,
+        interaction_id: "uuid.UUID",
+        was_claude_intent: bool = False,
+    ) -> tuple[str, str, "Intent"] | None:
+        """Ask user if they want anything else and handle follow-up.
+
+        After responding, asks "Anything else?" and listens for the user's answer.
+        If affirmative, prompts for the question and processes it.
+
+        Args:
+            interaction_id: Current interaction UUID
+            was_claude_intent: Whether the previous interaction was Claude-based
+
+        Returns:
+            Tuple of (transcript, response_text, intent) if user had follow-up,
+            None if user declined or no response
+        """
+        if not self._synthesizer or not self._playback or not self._transcriber:
+            return None
+
+        # Affirmative responses that indicate user wants to continue
+        affirmative_words = {
+            "yes", "yeah", "yep", "sure", "okay", "ok", "please",
+            "uh huh", "mm hmm", "go ahead", "one more", "another",
+            "i do", "i have", "actually", "yes please"
+        }
+
+        # Negative responses that indicate user is done
+        negative_words = {
+            "no", "nope", "nah", "nothing", "that's all", "that's it",
+            "i'm good", "all good", "no thanks", "thanks", "thank you",
+            "goodbye", "bye", "done", "finished", "all set"
+        }
+
+        # Ask "Anything else?"
+        prompt = "Anything else?"
+        logger.info(f"Asking: '{prompt}'")
+
+        try:
+            synthesis_result = self._synthesizer.synthesize(prompt)
+            self._playback.play(synthesis_result.audio, synthesis_result.sample_rate)
+        except Exception as e:
+            logger.warning(f"Failed to synthesize 'anything else' prompt: {e}")
+            return None
+
+        # Listen for response
+        follow_up_audio = self._record_follow_up(timeout_ms=5000)
+
+        if not follow_up_audio:
+            logger.info("No response to 'anything else', ending conversation")
+            return None
+
+        # Transcribe the response
+        response_result = self._transcriber.transcribe(follow_up_audio, 16000)
+        response_text = response_result.text.strip().lower()
+
+        if not response_text:
+            logger.info("Empty response to 'anything else', ending conversation")
+            return None
+
+        logger.info(f"User response to 'anything else': '{response_text}'")
+
+        # Check for negative response
+        response_words = set(response_text.replace("'", "").split())
+        if response_words & negative_words or any(neg in response_text for neg in negative_words):
+            logger.info("User declined, ending conversation")
+            # Say goodbye
+            try:
+                goodbye = "Alright, let me know if you need anything."
+                synth = self._synthesizer.synthesize(goodbye)
+                self._playback.play(synth.audio, synth.sample_rate)
+            except Exception:
+                pass
+            return None
+
+        # Check for affirmative response
+        is_affirmative = (
+            response_words & affirmative_words
+            or any(aff in response_text for aff in affirmative_words)
+        )
+
+        # If affirmative but no actual question, prompt for it
+        if is_affirmative and len(response_text.split()) <= 3:
+            # Short affirmative - ask what they want to know
+            if was_claude_intent:
+                follow_prompt = "Go ahead, what else would you like to know?"
+            else:
+                follow_prompt = "What else can I help you with?"
+
+            logger.info(f"Prompting: '{follow_prompt}'")
+            try:
+                synth = self._synthesizer.synthesize(follow_prompt)
+                self._playback.play(synth.audio, synth.sample_rate)
+            except Exception as e:
+                logger.warning(f"Failed to synthesize follow-up prompt: {e}")
+                return None
+
+            # Listen for the actual question
+            question_audio = self._record_follow_up(timeout_ms=10000)
+
+            if not question_audio:
+                logger.info("No question provided, ending conversation")
+                return None
+
+            question_result = self._transcriber.transcribe(question_audio, 16000)
+            actual_question = question_result.text.strip()
+
+            if not actual_question:
+                return None
+
+            response_text = actual_question
+            logger.info(f"User question: '{actual_question}'")
+
+        # We have a question to process (either embedded in response or from follow-up)
+        _log_interaction_timing("captured", response_text)
+
+        # Classify and handle the new question
+        new_intent = self._intent_classifier.classify(response_text)
+        logger.info(f"Follow-up intent: {new_intent.type.value}")
+
+        # Handle Claude continuation - if previous was Claude and this looks like a follow-up
+        is_claude_followup = was_claude_intent and new_intent.type not in (
+            IntentType.TIME_QUERY,
+            IntentType.TIMER_SET,
+            IntentType.REMINDER_SET,
+            IntentType.NOTE_CAPTURE,
+        )
+
+        if is_claude_followup and self._claude_handler is not None:
+            # Route to Claude for continuation
+            new_intent = Intent(
+                type=IntentType.CLAUDE_QUERY,
+                confidence=0.9,
+                entities={"query": response_text},
+            )
+            logger.info("Routing to Claude for conversation continuation")
+
+        # Show thinking indicator for non-Claude intents
+        is_claude_intent = new_intent.type in (
+            IntentType.CLAUDE_QUERY,
+            IntentType.CLAUDE_SUMMARY,
+            IntentType.CLAUDE_RESET,
+        )
+        if not is_claude_intent:
+            self._start_thinking_indicator()
+
+        try:
+            new_response = self._handle_intent(new_intent, interaction_id)
+        finally:
+            if not is_claude_intent:
+                self._stop_thinking_indicator()
+
+        _log_interaction_timing("responded", new_response)
+
+        # Update last response for context
+        self._last_response = new_response
+        self._last_response_timestamp = datetime.now(UTC)
+
+        # Synthesize and play the response
+        try:
+            response_synth = self._synthesizer.synthesize(new_response)
+            self._playback.play(response_synth.audio, response_synth.sample_rate)
+        except Exception as e:
+            logger.error(f"Failed to synthesize follow-up response: {e}")
+            return None
+
+        # Play completion beep
+        if self._feedback:
+            self._feedback.play(FeedbackType.RESPONSE_COMPLETE, blocking=True)
+
+        return (response_text, new_response, new_intent)
 
     def start(self) -> None:
         """Start the voice loop in a background thread."""
