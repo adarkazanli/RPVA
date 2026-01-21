@@ -63,13 +63,17 @@ def create_synthesizer(
         try:
             from .elevenlabs import ELEVENLABS_AVAILABLE, ElevenLabsSynthesizer
 
+            logger.debug(f"TTS: ELEVENLABS_AVAILABLE={ELEVENLABS_AVAILABLE}")
             if ELEVENLABS_AVAILABLE:
                 synth = ElevenLabsSynthesizer()
+                logger.debug(f"TTS: ElevenLabs synth.is_available={synth.is_available}")
                 if synth.is_available:
                     logger.info("TTS: Using ElevenLabsSynthesizer (emotional TTS)")
                     return synth
-                elif use_elevenlabs is True:
-                    logger.warning("TTS: ElevenLabs requested but not available")
+                else:
+                    logger.debug("TTS: ElevenLabs not available (no valid API key)")
+            else:
+                logger.debug("TTS: elevenlabs package not installed")
         except Exception as e:
             logger.warning(f"TTS: ElevenLabsSynthesizer failed to initialize: {e}")
             if use_elevenlabs is True:
