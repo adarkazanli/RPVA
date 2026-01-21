@@ -279,6 +279,13 @@ def main() -> int:
                     paired_activities_collection=mongo_client.database["activities"],
                 )
                 logger.info("Note and activity storage configured")
+
+                # Initialize Claude storage for Claude query mode
+                from .storage.claude_repository import ClaudeRepository
+
+                claude_repo = ClaudeRepository(mongo_client.database)
+                orchestrator.set_claude_storage(claude_repo)
+                logger.info("Claude storage configured")
             else:
                 logger.warning("MongoDB not available - time queries will be disabled")
         except Exception as e:

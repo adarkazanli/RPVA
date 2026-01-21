@@ -226,6 +226,10 @@ class Orchestrator:
         self._note_data_source: object | None = None
         self._entity_extractor: object | None = None
 
+        # Claude query handler (set via set_claude_storage)
+        self._claude_handler: object | None = None
+        self._claude_repository: object | None = None
+
         # Background check thread for timers/reminders
         self._check_thread: threading.Thread | None = None
 
@@ -432,8 +436,6 @@ class Orchestrator:
             # Step 4: Classify intent (or force NOTE_CAPTURE for note mode)
             if is_note_mode:
                 # Force note capture intent for note-taking mode
-                from .intent import Intent, IntentType
-
                 intent = Intent(
                     type=IntentType.NOTE_CAPTURE,
                     confidence=1.0,
@@ -446,11 +448,19 @@ class Orchestrator:
 
             # Step 5: Handle intent (command or LLM)
             response_start = time.time()
-            self._start_thinking_indicator()
+            # Claude intents have their own waiting indicator - skip thinking indicator
+            is_claude_intent = intent.type in (
+                IntentType.CLAUDE_QUERY,
+                IntentType.CLAUDE_SUMMARY,
+                IntentType.CLAUDE_RESET,
+            )
+            if not is_claude_intent:
+                self._start_thinking_indicator()
             try:
                 response_text = self._handle_intent(intent, interaction_id)
             finally:
-                self._stop_thinking_indicator()
+                if not is_claude_intent:
+                    self._stop_thinking_indicator()
             latencies["llm_ms"] = int((time.time() - response_start) * 1000)
             logger.info(f"Response: '{response_text[:50]}...'")
 
@@ -572,13 +582,21 @@ class Orchestrator:
                             _log_interaction_timing("captured", combined_request)
 
                             combined_intent = self._intent_classifier.classify(combined_request)
-                            self._start_thinking_indicator()
+                            # Claude intents have their own waiting indicator
+                            is_claude_intent = combined_intent.type in (
+                                IntentType.CLAUDE_QUERY,
+                                IntentType.CLAUDE_SUMMARY,
+                                IntentType.CLAUDE_RESET,
+                            )
+                            if not is_claude_intent:
+                                self._start_thinking_indicator()
                             try:
                                 combined_response = self._handle_intent(
                                     combined_intent, interaction_id
                                 )
                             finally:
-                                self._stop_thinking_indicator()
+                                if not is_claude_intent:
+                                    self._stop_thinking_indicator()
                             _log_interaction_timing("responded", combined_response)
 
                             # Update last response for follow-up context
@@ -652,11 +670,19 @@ class Orchestrator:
 
                         # Classify and handle follow-up with thinking indicator
                         follow_up_intent = self._intent_classifier.classify(follow_up_text)
-                        self._start_thinking_indicator()
+                        # Claude intents have their own waiting indicator
+                        is_claude_intent = follow_up_intent.type in (
+                            IntentType.CLAUDE_QUERY,
+                            IntentType.CLAUDE_SUMMARY,
+                            IntentType.CLAUDE_RESET,
+                        )
+                        if not is_claude_intent:
+                            self._start_thinking_indicator()
                         try:
                             follow_up_response = self._handle_intent(follow_up_intent, interaction_id)
                         finally:
-                            self._stop_thinking_indicator()
+                            if not is_claude_intent:
+                                self._stop_thinking_indicator()
                         _log_interaction_timing("responded", follow_up_response)
 
                         # Update last response for follow-up context
@@ -840,7 +866,20 @@ class Orchestrator:
             return self._handle_action_items(intent)
         elif intent.type == IntentType.EMAIL_ACTION_ITEMS:
             return self._handle_email_action_items(intent)
+        # Claude query intents (009-claude-query-mode)
+        elif intent.type == IntentType.CLAUDE_QUERY:
+            return self._handle_claude_query(intent)
+        elif intent.type == IntentType.CLAUDE_SUMMARY:
+            return self._handle_claude_summary(intent)
+        elif intent.type == IntentType.CLAUDE_RESET:
+            return self._handle_claude_reset(intent)
         else:
+            # Check if we're in Claude follow-up window first
+            # This allows natural follow-up questions without trigger phrase
+            if self.is_in_claude_followup_window():
+                logger.info("Routing to Claude as follow-up (within 5-second window)")
+                return self._handle_claude_query(intent, is_followup=True)
+
             # Use QueryRouter for smart routing of general questions
             routing_decision = self._query_router.classify(intent.raw_text)
             logger.debug(
@@ -2289,6 +2328,163 @@ class Orchestrator:
         else:
             return "I wasn't able to send the email. Please try again later."
 
+    def _handle_claude_query(self, intent: Intent, is_followup: bool = False) -> str:
+        """Handle Claude query intent ('ask Claude X') or follow-up question.
+
+        Args:
+            intent: Classified intent with query entity.
+            is_followup: Whether this is a follow-up question (no trigger phrase).
+
+        Returns:
+            Response from Claude or error message.
+        """
+        from ara.claude import (
+            ClaudeAuthError,
+            ClaudeConnectivityError,
+            ClaudeHandler,
+            ClaudeTimeoutError,
+        )
+
+        # For explicit "ask Claude" queries, extract from entity
+        # For follow-ups, use the raw text
+        if is_followup:
+            query = intent.raw_text
+        else:
+            query = intent.entities.get("query", intent.raw_text)
+
+        logger.info(f"Claude query (followup={is_followup}): {query[:50]}...")
+
+        # Check if Claude handler is configured
+        if self._claude_handler is None:
+            if self._claude_repository is None:
+                return (
+                    "Claude queries are not available. "
+                    "Please configure the Claude storage first."
+                )
+            # Create handler on demand
+            self._claude_handler = ClaudeHandler(
+                repository=self._claude_repository,  # type: ignore
+                feedback=self._feedback,
+            )
+
+        try:
+            handler: ClaudeHandler = self._claude_handler  # type: ignore
+            response = handler.handle_query(
+                query=query,
+                is_followup=is_followup,
+            )
+            return response
+
+        except ClaudeAuthError:
+            return handler.get_auth_setup_message()
+        except ClaudeConnectivityError:
+            return handler.get_connectivity_error_message()
+        except ClaudeTimeoutError:
+            return handler.get_timeout_message()
+        except Exception as e:
+            logger.error(f"Claude query failed: {e}")
+            return "Sorry, I couldn't get a response from Claude. Please try again."
+
+    def _handle_claude_summary(self, intent: Intent) -> str:
+        """Handle Claude summary intent ('summarize my Claude conversations').
+
+        Args:
+            intent: Classified intent with period entity.
+
+        Returns:
+            Summary of Claude conversations or error message.
+        """
+        from ara.claude import ClaudeHandler
+
+        period = intent.entities.get("period", "today")
+        logger.info(f"Claude summary request for period: {period}")
+
+        # Check if Claude handler is configured
+        if self._claude_handler is None:
+            if self._claude_repository is None:
+                return (
+                    "Claude conversation history is not available. "
+                    "Please configure the Claude storage first."
+                )
+            # Create handler on demand
+            self._claude_handler = ClaudeHandler(
+                repository=self._claude_repository,  # type: ignore
+                feedback=self._feedback,
+            )
+
+        try:
+            handler: ClaudeHandler = self._claude_handler  # type: ignore
+            return handler.handle_summary_request(period=period)
+        except Exception as e:
+            logger.error(f"Claude summary failed: {e}")
+            return "Sorry, I couldn't retrieve your Claude conversation history."
+
+    def _handle_claude_reset(self, intent: Intent) -> str:
+        """Handle Claude reset intent ('new conversation', 'start over').
+
+        Args:
+            intent: Classified intent (no entities needed).
+
+        Returns:
+            Confirmation message or info if no active session.
+        """
+        from ara.claude import ClaudeHandler
+
+        logger.info("Claude reset request")
+
+        # Check if Claude handler is configured
+        if self._claude_handler is None:
+            if self._claude_repository is None:
+                return "There's no active Claude conversation to reset."
+            # Create handler on demand
+            self._claude_handler = ClaudeHandler(
+                repository=self._claude_repository,  # type: ignore
+                feedback=self._feedback,
+            )
+
+        try:
+            handler: ClaudeHandler = self._claude_handler  # type: ignore
+            return handler.handle_reset()
+        except Exception as e:
+            logger.error(f"Claude reset failed: {e}")
+            return "Sorry, I couldn't reset the conversation."
+
+    def is_in_claude_followup_window(self) -> bool:
+        """Check if currently within Claude follow-up window.
+
+        Returns:
+            True if in follow-up window and can accept questions without trigger.
+        """
+        if self._claude_handler is None:
+            return False
+        from ara.claude import ClaudeHandler
+
+        handler: ClaudeHandler = self._claude_handler  # type: ignore
+        return handler.is_in_followup_window()
+
+    def reset_claude_session(self) -> None:
+        """Reset the Claude conversation session."""
+        if self._claude_handler is not None:
+            from ara.claude import ClaudeHandler
+
+            handler: ClaudeHandler = self._claude_handler  # type: ignore
+            handler.reset_session()
+
+    def set_claude_storage(self, repository: object) -> None:
+        """Set storage for Claude queries (call when MongoDB is available).
+
+        Args:
+            repository: ClaudeRepository instance for storing queries/responses.
+        """
+        from ara.claude import ClaudeHandler
+
+        self._claude_repository = repository
+        self._claude_handler = ClaudeHandler(
+            repository=repository,  # type: ignore
+            feedback=self._feedback,
+        )
+        logger.info("Claude query storage configured")
+
     def set_time_query_storage(self, storage: object) -> None:
         """Set storage for time queries (call when MongoDB is available).
 
@@ -2991,12 +3187,20 @@ class Orchestrator:
                 combined_intent = self._intent_classifier.classify(combined_request)
                 logger.info(f"Continuation intent: {combined_intent.type.value}")
 
-                # Play thinking indicator while processing
-                self._start_thinking_indicator()
+                # Claude intents have their own waiting indicator
+                is_claude_intent = combined_intent.type in (
+                    IntentType.CLAUDE_QUERY,
+                    IntentType.CLAUDE_SUMMARY,
+                    IntentType.CLAUDE_RESET,
+                )
+                # Play thinking indicator while processing (except Claude intents)
+                if not is_claude_intent:
+                    self._start_thinking_indicator()
                 try:
                     combined_response = self._handle_intent(combined_intent, interaction_id)
                 finally:
-                    self._stop_thinking_indicator()
+                    if not is_claude_intent:
+                        self._stop_thinking_indicator()
                 _log_interaction_timing("responded", combined_response)
 
                 # Update last response for follow-up context

@@ -41,6 +41,10 @@ class IntentType(Enum):
     DIGEST_WEEKLY = "digest_weekly"  # "how did I spend my time this week?"
     ACTION_ITEMS_QUERY = "action_items_query"  # "what are my action items?"
     EMAIL_ACTION_ITEMS = "email_action_items"  # "email me my action items"
+    # Claude query intents (009-claude-query-mode)
+    CLAUDE_QUERY = "claude_query"  # "ask Claude X"
+    CLAUDE_SUMMARY = "claude_summary"  # "summarize my Claude conversations"
+    CLAUDE_RESET = "claude_reset"  # "new conversation" (during Claude mode)
     UNKNOWN = "unknown"
 
 
@@ -434,6 +438,38 @@ class IntentClassifier:
         r"(?:am\s+I|are\s+we)\s+spending\s+enough\s+time\s+on\s+(.+)",
     ]
 
+    # Claude query patterns (009-claude-query-mode)
+    # "ask Claude X", "hey Claude, X", "Claude, X"
+    CLAUDE_QUERY_PATTERNS = [
+        r"ask\s+(?:claud[e]?|cloud)\s+(?:to\s+)?(.+)",  # "ask Claude/cloud what is X"
+        r"hey\s+(?:claude|cloud)[,\s]+(.+)",  # "hey Claude/cloud, what is X"
+        r"(?:claude|cloud)[,\s]+(?:tell\s+me\s+)?(.+)",  # "Claude/cloud, tell me about X"
+        r"tell\s+(?:claude|cloud)\s+(.+)",  # "tell Claude/cloud that..."
+        r"have\s+(?:claude|cloud)\s+(.+)",  # "have Claude/cloud explain..."
+        r"get\s+(?:claude|cloud)(?:'s)?\s+(?:opinion|thoughts?|take)\s+(?:on\s+)?(.+)",  # "get Claude's opinion on"
+    ]
+
+    # Claude summary patterns (009-claude-query-mode)
+    # "summarize my Claude conversations today"
+    CLAUDE_SUMMARY_PATTERNS = [
+        r"summarize\s+(?:my\s+)?claude\s+conversations?\s+(?:from\s+)?(today|yesterday|this\s+week|this\s+month)",
+        r"what\s+did\s+(?:I|we)\s+ask\s+claude\s+(today|yesterday|this\s+week|this\s+month)",
+        r"what\s+(?:are|were)\s+(?:my\s+)?(?:key\s+)?learnings?\s+from\s+claude\s+(today|yesterday|this\s+week|this\s+month)?",
+        r"(?:show|list|give)\s+(?:me\s+)?(?:my\s+)?claude\s+conversation\s+history",
+        r"(?:give\s+me\s+)?(?:a\s+)?(?:recap|summary)\s+(?:of\s+)?(?:my\s+)?claude\s+(?:conversations?|discussions?)",
+        r"claude\s+(?:conversation|query)\s+(?:history|summary)",
+    ]
+
+    # Claude reset patterns (009-claude-query-mode)
+    # "new conversation", "start over", "forget our conversation"
+    CLAUDE_RESET_PATTERNS = [
+        r"^new\s+conversation$",
+        r"^start\s+(?:over|fresh)$",
+        r"^(?:reset|clear)\s+(?:the\s+)?conversation(?:\s+history)?$",
+        r"^forget\s+(?:our|this|the)\s+conversation$",
+        r"^(?:let'?s\s+)?start\s+(?:a\s+)?new\s+(?:conversation|chat)$",
+    ]
+
     def __init__(self) -> None:
         """Initialize the classifier."""
         # Pre-compile patterns for efficiency
@@ -482,6 +518,16 @@ class IntentClassifier:
         self._email_action_items = [
             re.compile(p, re.IGNORECASE) for p in self.EMAIL_ACTION_ITEMS_PATTERNS
         ]
+        # Claude query patterns (009-claude-query-mode)
+        self._claude_query = [
+            re.compile(p, re.IGNORECASE) for p in self.CLAUDE_QUERY_PATTERNS
+        ]
+        self._claude_summary = [
+            re.compile(p, re.IGNORECASE) for p in self.CLAUDE_SUMMARY_PATTERNS
+        ]
+        self._claude_reset = [
+            re.compile(p, re.IGNORECASE) for p in self.CLAUDE_RESET_PATTERNS
+        ]
 
     def classify(self, text: str) -> Intent:
         """Classify the given text into an intent.
@@ -503,6 +549,16 @@ class IntentClassifier:
             )
 
         # Try each intent type in order of specificity
+        # Claude reset intent (check very early - specific phrases)
+        if intent := self._try_claude_reset(text):
+            return intent
+        # Claude summary intent (must check before query - more specific)
+        if intent := self._try_claude_summary(text):
+            return intent
+        # Claude query intents (explicit trigger, check early)
+        if intent := self._try_claude_query(text):
+            return intent
+
         # Timer intents
         if intent := self._try_timer_set(text):
             return intent
@@ -1235,6 +1291,101 @@ class IntentClassifier:
                     type=IntentType.DIGEST_WEEKLY,
                     confidence=0.95,
                     entities=entities,
+                    raw_text=text,
+                )
+        return None
+
+    def _try_claude_query(self, text: str) -> Intent | None:
+        """Try to match Claude query patterns.
+
+        Examples: "ask Claude what is the capital of France",
+                  "hey Claude, explain quantum computing",
+                  "Claude, tell me about Python"
+        """
+        for pattern in self._claude_query:
+            match = pattern.search(text)
+            if match:
+                entities = {}
+                groups = match.groups()
+
+                # Extract the query content
+                if groups and groups[0]:
+                    query = groups[0].strip().rstrip("?")
+                    entities["query"] = query
+
+                return Intent(
+                    type=IntentType.CLAUDE_QUERY,
+                    confidence=0.95,
+                    entities=entities,
+                    raw_text=text,
+                )
+        return None
+
+    def _try_claude_summary(self, text: str) -> Intent | None:
+        """Try to match Claude summary/history patterns.
+
+        Examples: "summarize my Claude conversations today",
+                  "what did I ask Claude this week",
+                  "show me my Claude conversation history"
+        """
+        text_lower = text.lower()
+
+        for pattern in self._claude_summary:
+            match = pattern.search(text)
+            if match:
+                entities = {}
+                groups = match.groups()
+
+                # Extract period from capture group or detect from text
+                period = None
+                if groups and groups[0]:
+                    period_raw = groups[0].strip().lower()
+                    # Normalize period
+                    if "today" in period_raw:
+                        period = "today"
+                    elif "yesterday" in period_raw:
+                        period = "yesterday"
+                    elif "week" in period_raw:
+                        period = "week"
+                    elif "month" in period_raw:
+                        period = "month"
+                    else:
+                        period = period_raw
+
+                # Fallback: detect period from text if not in capture group
+                if not period:
+                    if "today" in text_lower:
+                        period = "today"
+                    elif "yesterday" in text_lower:
+                        period = "yesterday"
+                    elif "week" in text_lower:
+                        period = "week"
+                    elif "month" in text_lower:
+                        period = "month"
+
+                if period:
+                    entities["period"] = period
+
+                return Intent(
+                    type=IntentType.CLAUDE_SUMMARY,
+                    confidence=0.95,
+                    entities=entities,
+                    raw_text=text,
+                )
+        return None
+
+    def _try_claude_reset(self, text: str) -> Intent | None:
+        """Try to match Claude reset/new conversation patterns.
+
+        Examples: "new conversation", "start over", "forget our conversation"
+        """
+        for pattern in self._claude_reset:
+            match = pattern.search(text)
+            if match:
+                return Intent(
+                    type=IntentType.CLAUDE_RESET,
+                    confidence=0.95,
+                    entities={},
                     raw_text=text,
                 )
         return None
