@@ -4,57 +4,91 @@ This document describes the complete conversation flow logic in Ara Voice Assist
 
 ## High-Level Flow
 
+![Conversation Flow Diagram](conversation-flow.png)
+
 ```mermaid
 flowchart TD
-    START([Start]) --> LISTEN[Listen for Wake Word]
-    LISTEN --> |Wake word detected| BEEP1[Play wake beep]
-    BEEP1 --> RECORD[Record user speech]
+    START(["1. Start"]) --> LISTEN["2. Listen for Wake Word"]
+    LISTEN --> |Wake word detected| BEEP1["3. Play wake beep"]
+    BEEP1 --> RECORD["4. Record user speech"]
     RECORD --> |No speech| LISTEN
-    RECORD --> |Speech detected| TRANSCRIBE[Transcribe audio]
+    RECORD --> |Speech detected| TRANSCRIBE["5. Transcribe audio"]
     TRANSCRIBE --> |Empty| LISTEN
-    TRANSCRIBE --> CLEAN[Clean transcript]
-    CLEAN --> MODE{Note mode?}
+    TRANSCRIBE --> CLEAN["6. Clean transcript"]
+    CLEAN --> MODE{"7. Note mode?"}
 
-    MODE --> |Yes| NOTE_INTENT[Force NOTE_CAPTURE intent]
-    MODE --> |No| CLASSIFY[Classify intent]
+    MODE --> |Yes| NOTE_INTENT["8. Force NOTE_CAPTURE intent"]
+    MODE --> |No| CLASSIFY["9. Classify intent"]
 
     NOTE_INTENT --> HANDLE_INTENT
-    CLASSIFY --> HANDLE_INTENT[Handle intent]
+    CLASSIFY --> HANDLE_INTENT["10. Handle intent"]
 
-    HANDLE_INTENT --> SYNTHESIZE[Synthesize response]
-    SYNTHESIZE --> PLAY[Play response audio]
+    HANDLE_INTENT --> SYNTHESIZE["11. Synthesize response"]
+    SYNTHESIZE --> PLAY["12. Play response audio"]
 
-    PLAY --> NOTE_CHECK{Note mode?}
+    PLAY --> NOTE_CHECK{"13. Note mode?"}
     NOTE_CHECK --> |Yes| LISTEN
-    NOTE_CHECK --> |No| ANYTHING_ELSE[Ask 'Anything else?']
+    NOTE_CHECK --> |No| ANYTHING_ELSE["14. Ask 'Anything else?'"]
 
-    ANYTHING_ELSE --> AE_LISTEN[Listen for response]
-    AE_LISTEN --> |No response/silence| GOODBYE[Say goodbye]
-    AE_LISTEN --> |Response detected| AE_TRANSCRIBE[Transcribe response]
+    ANYTHING_ELSE --> AE_LISTEN["15. Listen for response"]
+    AE_LISTEN --> |No response/silence| GOODBYE["22. Say goodbye"]
+    AE_LISTEN --> |Response detected| AE_TRANSCRIBE["16. Transcribe response"]
 
-    AE_TRANSCRIBE --> AE_CHECK{User response}
-    AE_CHECK --> |"No"/"Thanks"/negative| GOODBYE
-    AE_CHECK --> |"Yes"/affirmative only| PROMPT[Ask 'What else?']
-    AE_CHECK --> |Contains question| PROCESS_FOLLOWUP[Process question]
+    AE_TRANSCRIBE --> AE_CHECK{"17. User response"}
+    AE_CHECK --> |No/Thanks/negative| GOODBYE
+    AE_CHECK --> |Yes/affirmative only| PROMPT["18. Ask 'What else?'"]
+    AE_CHECK --> |Contains question| PROCESS_FOLLOWUP["19. Process question"]
 
-    PROMPT --> PROMPT_LISTEN[Listen for question]
+    PROMPT --> PROMPT_LISTEN["18a. Listen for question"]
     PROMPT_LISTEN --> |No response| GOODBYE
     PROMPT_LISTEN --> |Question received| PROCESS_FOLLOWUP
 
-    PROCESS_FOLLOWUP --> CLASSIFY_FOLLOWUP[Classify follow-up intent]
-    CLASSIFY_FOLLOWUP --> CLAUDE_CHECK{Previous was Claude?}
+    PROCESS_FOLLOWUP --> CLASSIFY_FOLLOWUP["20. Classify follow-up intent"]
+    CLASSIFY_FOLLOWUP --> CLAUDE_CHECK{"21. Previous was Claude?"}
 
-    CLAUDE_CHECK --> |Yes & general question| ROUTE_CLAUDE[Route to Claude]
-    CLAUDE_CHECK --> |No or specific intent| HANDLE_FOLLOWUP[Handle intent normally]
+    CLAUDE_CHECK --> |Yes and general question| ROUTE_CLAUDE["21a. Route to Claude"]
+    CLAUDE_CHECK --> |No or specific intent| HANDLE_FOLLOWUP["21b. Handle intent normally"]
 
-    ROUTE_CLAUDE --> SYNTH_FOLLOWUP[Synthesize response]
+    ROUTE_CLAUDE --> SYNTH_FOLLOWUP["21c. Synthesize response"]
     HANDLE_FOLLOWUP --> SYNTH_FOLLOWUP
 
-    SYNTH_FOLLOWUP --> PLAY_FOLLOWUP[Play response]
+    SYNTH_FOLLOWUP --> PLAY_FOLLOWUP["21d. Play response"]
     PLAY_FOLLOWUP --> ANYTHING_ELSE
 
     GOODBYE --> LISTEN
 ```
+
+### Node Reference
+
+| Node | Description |
+|------|-------------|
+| 1 | Start - Entry point |
+| 2 | Listen for Wake Word - Awaiting "Hey Ara" |
+| 3 | Play wake beep - Audio feedback |
+| 4 | Record user speech - Capture audio |
+| 5 | Transcribe audio - Speech-to-text |
+| 6 | Clean transcript - Remove filler words |
+| 7 | Note mode? - Check if in note-taking mode |
+| 8 | Force NOTE_CAPTURE intent - Override classification |
+| 9 | Classify intent - Determine user intent |
+| 10 | Handle intent - Route to appropriate handler |
+| 11 | Synthesize response - Generate TTS audio |
+| 12 | Play response audio - Speak response |
+| 13 | Note mode? - Check for continuation |
+| 14 | Ask "Anything else?" - Prompt for follow-up |
+| 15 | Listen for response - Wait for user reply |
+| 16 | Transcribe response - Convert reply to text |
+| 17 | User response - Decision point |
+| 18 | Ask "What else?" - Prompt for question |
+| 18a | Listen for question - Wait for follow-up |
+| 19 | Process question - Handle follow-up |
+| 20 | Classify follow-up intent - Categorize |
+| 21 | Previous was Claude? - Check conversation context |
+| 21a | Route to Claude - Continue Claude conversation |
+| 21b | Handle intent normally - Standard processing |
+| 21c | Synthesize response - Generate follow-up TTS |
+| 21d | Play response - Speak follow-up |
+| 22 | Say goodbye - End interaction |
 
 ## Detailed Intent Classification
 
