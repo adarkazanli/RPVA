@@ -383,11 +383,48 @@ def format_time_local(dt: datetime) -> str:
     return local_dt.strftime("%-I:%M %p").replace(" AM", " AM").replace(" PM", " PM")
 
 
+def _word_to_number(text: str) -> str:
+    """Convert word numbers to digits.
+
+    Args:
+        text: Text potentially containing word numbers.
+
+    Returns:
+        Text with word numbers converted to digits.
+    """
+    word_numbers = {
+        "one": "1",
+        "two": "2",
+        "three": "3",
+        "four": "4",
+        "five": "5",
+        "six": "6",
+        "seven": "7",
+        "eight": "8",
+        "nine": "9",
+        "ten": "10",
+        "fifteen": "15",
+        "twenty": "20",
+        "thirty": "30",
+        "forty": "40",
+        "forty-five": "45",
+        "fortyfive": "45",
+        "fifty": "50",
+        "sixty": "60",
+        "half": "30",  # "half an hour" -> "30 minutes"
+    }
+    result = text.lower()
+    for word, digit in word_numbers.items():
+        # Use word boundary to avoid partial matches
+        result = re.sub(rf"\b{word}\b", digit, result)
+    return result
+
+
 def parse_reminder_time(text: str) -> datetime | None:
     """Parse a natural language time expression into a datetime.
 
     Args:
-        text: Natural language time (e.g., "in 1 hour", "at 3 PM").
+        text: Natural language time (e.g., "in 1 hour", "at 3 PM", "in one minute").
 
     Returns:
         Datetime for the reminder, or None if unparseable.
@@ -395,18 +432,21 @@ def parse_reminder_time(text: str) -> datetime | None:
     Examples:
         >>> parse_reminder_time("in 1 hour")
         datetime(...)  # 1 hour from now
+        >>> parse_reminder_time("in one minute")
+        datetime(...)  # 1 minute from now
         >>> parse_reminder_time("at 3:30 PM")
         datetime(...)  # Today at 3:30 PM
     """
     if not text:
         return None
 
-    text = text.lower().strip()
+    # Convert word numbers to digits before parsing
+    text = _word_to_number(text.lower().strip())
     now = datetime.now(UTC)
 
-    # Try "in X seconds/minutes/hours" pattern
+    # Try "in X seconds/minutes/hours" pattern (also matches without "in")
     relative_match = re.search(
-        r"in\s+(\d+)\s*(second|sec|minute|min|hour|hr)s?",
+        r"(?:in\s+)?(\d+)\s*(second|sec|minute|min|hour|hr)s?",
         text,
         re.IGNORECASE,
     )
