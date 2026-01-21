@@ -30,6 +30,7 @@ TONE_FREQUENCIES: dict[FeedbackType, int] = {
     FeedbackType.INTERRUPT_ACKNOWLEDGED: 200,  # Low "boop" - distinct from wake beep
     FeedbackType.THINKING: 523,  # C5 - pleasant chime while waiting for LLM
     FeedbackType.RESPONSE_COMPLETE: 440,  # A4 - neutral long beep at end
+    FeedbackType.CLAUDE_WAITING: 392,  # G4 - musical loop for Claude waiting
 }
 
 # Default durations for generated tones (ms)
@@ -44,6 +45,7 @@ TONE_DURATIONS: dict[FeedbackType, int] = {
     FeedbackType.INTERRUPT_ACKNOWLEDGED: 100,  # Quick, doesn't delay response
     FeedbackType.THINKING: 150,  # Short chime, loops every 800ms
     FeedbackType.RESPONSE_COMPLETE: 400,  # Long beep to signal end of interaction
+    FeedbackType.CLAUDE_WAITING: 800,  # Musical loop segment for Claude waiting
 }
 
 
@@ -135,6 +137,7 @@ class SoundFeedback:
             FeedbackType.REMINDER_ALERT: "reminder_alert.wav",
             FeedbackType.SUCCESS: "success.wav",
             FeedbackType.PROCESSING: "beep.wav",
+            FeedbackType.CLAUDE_WAITING: "claude_waiting.wav",
         }
 
         if config is not None:

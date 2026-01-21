@@ -21,6 +21,7 @@ class FeedbackType(Enum):
     INTERRUPT_ACKNOWLEDGED = "interrupt_ack"
     THINKING = "thinking"  # Looping chime while waiting for LLM
     RESPONSE_COMPLETE = "response_complete"  # Long beep at end of interaction
+    CLAUDE_WAITING = "claude_waiting"  # Musical loop while waiting for Claude response
 
 
 class AudioFeedback(Protocol):
