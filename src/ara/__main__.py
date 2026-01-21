@@ -286,7 +286,7 @@ def main() -> int:
                 claude_repo = ClaudeRepository(
                     mongo_client.database["claude_interactions"]
                 )
-                orchestrator.set_claude_repository(claude_repo)
+                orchestrator.set_claude_storage(claude_repo)
                 logger.info("Claude storage configured")
             else:
                 logger.warning("MongoDB not available - time queries will be disabled")
