@@ -8,51 +8,51 @@ This document describes the complete conversation flow logic in Ara Voice Assist
 
 ```mermaid
 flowchart TD
-    START(["1. Start"]) --> LISTEN["2. Listen for Wake Word"]
-    LISTEN --> |Wake word detected| BEEP1["3. Play wake beep"]
-    BEEP1 --> RECORD["4. Record user speech"]
+    START([1. Start]) --> LISTEN[2. Listen for Wake Word]
+    LISTEN --> |Wake word detected| BEEP1[3. Play wake beep]
+    BEEP1 --> RECORD[4. Record user speech]
     RECORD --> |No speech| LISTEN
-    RECORD --> |Speech detected| TRANSCRIBE["5. Transcribe audio"]
+    RECORD --> |Speech detected| TRANSCRIBE[5. Transcribe audio]
     TRANSCRIBE --> |Empty| LISTEN
-    TRANSCRIBE --> CLEAN["6. Clean transcript"]
-    CLEAN --> MODE{"7. Note mode?"}
+    TRANSCRIBE --> CLEAN[6. Clean transcript]
+    CLEAN --> MODE{7. Note mode?}
 
-    MODE --> |Yes| NOTE_INTENT["8. Force NOTE_CAPTURE intent"]
-    MODE --> |No| CLASSIFY["9. Classify intent"]
+    MODE --> |Yes| NOTE_INTENT[8. Force NOTE_CAPTURE intent]
+    MODE --> |No| CLASSIFY[9. Classify intent]
 
     NOTE_INTENT --> HANDLE_INTENT
-    CLASSIFY --> HANDLE_INTENT["10. Handle intent"]
+    CLASSIFY --> HANDLE_INTENT[10. Handle intent]
 
-    HANDLE_INTENT --> SYNTHESIZE["11. Synthesize response"]
-    SYNTHESIZE --> PLAY["12. Play response audio"]
+    HANDLE_INTENT --> SYNTHESIZE[11. Synthesize response]
+    SYNTHESIZE --> PLAY[12. Play response audio]
 
-    PLAY --> NOTE_CHECK{"13. Note mode?"}
+    PLAY --> NOTE_CHECK{13. Note mode?}
     NOTE_CHECK --> |Yes| LISTEN
-    NOTE_CHECK --> |No| ANYTHING_ELSE["14. Ask 'Anything else?'"]
+    NOTE_CHECK --> |No| ANYTHING_ELSE[14. Ask Anything else?]
 
-    ANYTHING_ELSE --> AE_LISTEN["15. Listen for response"]
-    AE_LISTEN --> |No response/silence| GOODBYE["22. Say goodbye"]
-    AE_LISTEN --> |Response detected| AE_TRANSCRIBE["16. Transcribe response"]
+    ANYTHING_ELSE --> AE_LISTEN[15. Listen for response]
+    AE_LISTEN --> |No response/silence| GOODBYE[22. Say goodbye]
+    AE_LISTEN --> |Response detected| AE_TRANSCRIBE[16. Transcribe response]
 
-    AE_TRANSCRIBE --> AE_CHECK{"17. User response"}
+    AE_TRANSCRIBE --> AE_CHECK{17. User response}
     AE_CHECK --> |No/Thanks/negative| GOODBYE
-    AE_CHECK --> |Yes/affirmative only| PROMPT["18. Ask 'What else?'"]
-    AE_CHECK --> |Contains question| PROCESS_FOLLOWUP["19. Process question"]
+    AE_CHECK --> |Yes/affirmative only| PROMPT[18. Ask What else?]
+    AE_CHECK --> |Contains question| PROCESS_FOLLOWUP[19. Process question]
 
-    PROMPT --> PROMPT_LISTEN["18a. Listen for question"]
+    PROMPT --> PROMPT_LISTEN[18a. Listen for question]
     PROMPT_LISTEN --> |No response| GOODBYE
     PROMPT_LISTEN --> |Question received| PROCESS_FOLLOWUP
 
-    PROCESS_FOLLOWUP --> CLASSIFY_FOLLOWUP["20. Classify follow-up intent"]
-    CLASSIFY_FOLLOWUP --> CLAUDE_CHECK{"21. Previous was Claude?"}
+    PROCESS_FOLLOWUP --> CLASSIFY_FOLLOWUP[20. Classify follow-up intent]
+    CLASSIFY_FOLLOWUP --> CLAUDE_CHECK{21. Previous was Claude?}
 
-    CLAUDE_CHECK --> |Yes and general question| ROUTE_CLAUDE["21a. Route to Claude"]
-    CLAUDE_CHECK --> |No or specific intent| HANDLE_FOLLOWUP["21b. Handle intent normally"]
+    CLAUDE_CHECK --> |Yes and general question| ROUTE_CLAUDE[21a. Route to Claude]
+    CLAUDE_CHECK --> |No or specific intent| HANDLE_FOLLOWUP[21b. Handle intent normally]
 
-    ROUTE_CLAUDE --> SYNTH_FOLLOWUP["21c. Synthesize response"]
+    ROUTE_CLAUDE --> SYNTH_FOLLOWUP[21c. Synthesize response]
     HANDLE_FOLLOWUP --> SYNTH_FOLLOWUP
 
-    SYNTH_FOLLOWUP --> PLAY_FOLLOWUP["21d. Play response"]
+    SYNTH_FOLLOWUP --> PLAY_FOLLOWUP[21d. Play response]
     PLAY_FOLLOWUP --> ANYTHING_ELSE
 
     GOODBYE --> LISTEN
@@ -90,32 +90,46 @@ flowchart TD
 | 21d | Play response - Speak follow-up |
 | 22 | Say goodbye - End interaction |
 
-## Detailed Intent Classification
+## Detailed Intent Classification (Step 7 Routing)
 
 ```mermaid
 flowchart TD
     TRANSCRIPT[User transcript] --> INTENT_CLASS{Intent type?}
 
-    INTENT_CLASS --> |"Ask Claude..."| CLAUDE_QUERY[CLAUDE_QUERY]
-    INTENT_CLASS --> |"Set timer for..."| TIMER_SET[TIMER_SET]
-    INTENT_CLASS --> |"Remind me to..."| REMINDER_SET[REMINDER_SET]
-    INTENT_CLASS --> |"Remember..."/"Note..."| NOTE_CAPTURE[NOTE_CAPTURE]
-    INTENT_CLASS --> |"What time..."/"How long..."| TIME_QUERY[TIME_QUERY]
-    INTENT_CLASS --> |"Search for..."/"What is..."| WEB_SEARCH[WEB_SEARCH]
-    INTENT_CLASS --> |"What's the weather..."| WEATHER[WEATHER]
-    INTENT_CLASS --> |"Stop"/"Cancel"| STOP[STOP]
-    INTENT_CLASS --> |Other| GENERAL[GENERAL - Use LLM]
+    INTENT_CLASS --> |7a: Note/Remember| NOTE_CAPTURE[NOTE_CAPTURE]
+    INTENT_CLASS --> |7b: Ask Claude| CLAUDE_QUERY[CLAUDE_QUERY]
+    INTENT_CLASS --> |7c: Search/Google| WEB_SEARCH[WEB_SEARCH]
+    INTENT_CLASS --> |7d: Ask Perplexity| PERPLEXITY[PERPLEXITY_SEARCH]
+    INTENT_CLASS --> |Set timer for| TIMER_SET[TIMER_SET]
+    INTENT_CLASS --> |Remind me to| REMINDER_SET[REMINDER_SET]
+    INTENT_CLASS --> |What time/How long| TIME_QUERY[TIME_QUERY]
+    INTENT_CLASS --> |Stop/Cancel| STOP[STOP]
+    INTENT_CLASS --> |7z: Other| GENERAL[GENERAL - QueryRouter]
 
+    NOTE_CAPTURE --> NOTE_HANDLER[Note Handler]
     CLAUDE_QUERY --> CLAUDE_HANDLER[Claude Handler]
+    WEB_SEARCH --> SEARCH_HANDLER[Tavily Search]
+    PERPLEXITY --> PERPLEXITY_HANDLER[Perplexity Search]
     TIMER_SET --> TIMER_HANDLER[Timer Handler]
     REMINDER_SET --> REMINDER_HANDLER[Reminder Handler]
-    NOTE_CAPTURE --> NOTE_HANDLER[Note Handler]
     TIME_QUERY --> TIME_HANDLER[Time Query Handler]
-    WEB_SEARCH --> SEARCH_HANDLER[Search Handler]
-    WEATHER --> WEATHER_HANDLER[Weather Handler]
     STOP --> STOP_HANDLER[Stop Handler]
-    GENERAL --> LLM_HANDLER[LLM Handler]
+    GENERAL --> QUERY_ROUTER{QueryRouter}
+
+    QUERY_ROUTER --> |Personal data| MONGODB[MongoDB]
+    QUERY_ROUTER --> |Factual/current| TAVILY[Tavily Web Search]
+    QUERY_ROUTER --> |General knowledge| OLLAMA[Ollama LLM]
 ```
+
+### Step 7 Query Routing Reference
+
+| Route | Trigger Phrases | Handler |
+|-------|-----------------|---------|
+| 7a Note | "note that...", "remember...", "add to action items" | MongoDB notes |
+| 7b Claude | "ask Claude...", "hey Claude..." | Claude API |
+| 7c Web Search | "search for...", "google...", "what's the weather..." | Tavily API |
+| 7d Perplexity | "ask Perplexity...", "search with Perplexity..." | Perplexity API |
+| 7z Default | Everything else | QueryRouter → MongoDB/Tavily/Ollama |
 
 ## Interrupt Handling Flow
 
@@ -129,8 +143,8 @@ flowchart TD
     INTERRUPT --> INT_TRANSCRIBE[Transcribe interrupt]
     INT_TRANSCRIBE --> INT_CHECK{Interrupt type?}
 
-    INT_CHECK --> |"Stop"| STOP_NOW[Stop immediately, say "OK"]
-    INT_CHECK --> |"Wait"/"Hold on"| WAIT_MODE[Enter wait mode]
+    INT_CHECK --> |Stop| STOP_NOW[Stop immediately, say OK]
+    INT_CHECK --> |Wait/Hold on| WAIT_MODE[Enter wait mode]
     INT_CHECK --> |Follow-up question| FOLLOWUP[Process as follow-up]
     INT_CHECK --> |Noise/unclear| RESUME[Resume playback]
 
@@ -149,19 +163,19 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    ASK["Ara: 'Anything else?'"] --> LISTEN[Listen 5 seconds]
+    ASK[Ara: Anything else?] --> LISTEN[Listen 5 seconds]
 
     LISTEN --> |Timeout/silence| DECLINE[User declined]
     LISTEN --> |Speech detected| TRANSCRIBE[Transcribe]
 
     TRANSCRIBE --> ANALYZE{Analyze response}
 
-    ANALYZE --> |Contains: no, nope, thanks,<br>that's all, goodbye, done| DECLINE
-    ANALYZE --> |Contains: yes, yeah, sure,<br>okay, please, another| AFFIRM{Short response?}
+    ANALYZE --> |no/nope/thanks/done| DECLINE
+    ANALYZE --> |yes/yeah/sure/okay| AFFIRM{Short response?}
     ANALYZE --> |Contains actual question| QUESTION[Has question]
 
-    AFFIRM --> |≤3 words| PROMPT["Ara: 'What else can I help with?'"]
-    AFFIRM --> |>3 words| QUESTION
+    AFFIRM --> |3 words or less| PROMPT[Ara: What else?]
+    AFFIRM --> |More than 3 words| QUESTION
 
     PROMPT --> LISTEN2[Listen 10 seconds]
     LISTEN2 --> |No response| DECLINE
@@ -169,7 +183,7 @@ flowchart TD
 
     QUESTION --> PROCESS[Process the question]
 
-    DECLINE --> GOODBYE["Ara: 'Alright, let me know<br>if you need anything'"]
+    DECLINE --> GOODBYE[Ara: Let me know if you need anything]
     GOODBYE --> END([Return to wake word])
 
     PROCESS --> CLAUDE_CHECK{Previous was<br>Claude intent?}
@@ -216,7 +230,7 @@ flowchart TD
     ELEVEN --> |Yes| RETURN_ELEVEN[Return ElevenLabsSynthesizer<br>with Bella voice]
     ELEVEN --> |No| PLATFORM{Platform?}
 
-    PLATFORM --> |macOS| MACOS_CHECK{macOS 'say'<br>available?}
+    PLATFORM --> |macOS| MACOS_CHECK{macOS say<br>available?}
     PLATFORM --> |Raspberry Pi| PI_CHECK{Piper TTS<br>available?}
     PLATFORM --> |Other| OTHER_CHECK{Piper TTS<br>available?}
 
@@ -239,12 +253,12 @@ flowchart TD
 flowchart TD
     TEXT[Response text] --> ANALYZE{Analyze text content}
 
-    ANALYZE --> |"hello", "good morning",<br>"welcome"| WARM[WARM emotion]
-    ANALYZE --> |"great!", "awesome",<br>"excellent"| CHEERFUL[CHEERFUL emotion]
-    ANALYZE --> |"sorry", "error",<br>"problem"| CONCERNED[CONCERNED emotion]
-    ANALYZE --> |"relax", "don't worry",<br>"take your time"| CALM[CALM emotion]
-    ANALYZE --> |"weather", "temperature",<br>"degrees"| PROFESSIONAL[PROFESSIONAL emotion]
-    ANALYZE --> |"reminder", "don't forget",<br>"timer set"| ENTHUSIASTIC[ENTHUSIASTIC emotion]
+    ANALYZE --> |hello/good morning/welcome| WARM[WARM emotion]
+    ANALYZE --> |great!/awesome/excellent| CHEERFUL[CHEERFUL emotion]
+    ANALYZE --> |sorry/error/problem| CONCERNED[CONCERNED emotion]
+    ANALYZE --> |relax/take your time| CALM[CALM emotion]
+    ANALYZE --> |weather/temperature/degrees| PROFESSIONAL[PROFESSIONAL emotion]
+    ANALYZE --> |reminder/timer set| ENTHUSIASTIC[ENTHUSIASTIC emotion]
     ANALYZE --> |None of above| DEFAULT[WARM - default]
 
     WARM --> SYNTH[Synthesize with emotion cue]
