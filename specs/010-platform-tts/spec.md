@@ -70,13 +70,14 @@ As a user, if my preferred TTS engine is unavailable (missing models, system iss
 
 - **FR-001**: System MUST detect the current platform (macOS, Raspberry Pi/ARM Linux, other Linux) at startup
 - **FR-002**: System MUST automatically select the optimal TTS engine based on detected platform without user configuration
-- **FR-003**: On macOS, system MUST use the native macOS speech synthesis capabilities
+- **FR-003**: On macOS, system MUST use the native macOS speech synthesis with "Samantha" as the default voice
 - **FR-004**: On Raspberry Pi (ARM Linux), system MUST use Piper TTS with pre-configured voice models
 - **FR-005**: System MUST implement a fallback chain when primary TTS engine is unavailable
 - **FR-006**: System MUST maintain the existing `Synthesizer` protocol interface for all TTS implementations
 - **FR-007**: System MUST log which TTS engine was selected at startup
 - **FR-008**: System MUST provide a consistent API regardless of underlying TTS engine
 - **FR-009**: System MUST handle TTS engine initialization failures gracefully without crashing
+- **FR-010**: System MUST NOT provide user configuration to override automatic TTS engine selection (fully automatic)
 
 ### Key Entities
 
@@ -94,6 +95,13 @@ As a user, if my preferred TTS engine is unavailable (missing models, system iss
 - **SC-003**: 100% of voice responses are audible (either via TTS or fallback audio) - system never fails silently
 - **SC-004**: Zero manual configuration required for users to get optimal TTS on their platform
 - **SC-005**: Voice quality rating of "natural" or better on both macOS and Raspberry Pi platforms
+
+## Clarifications
+
+### Session 2026-01-21
+
+- Q: Which macOS voice should be used? → A: Use "Samantha" as the default voice
+- Q: Should users be able to override automatic TTS selection? → A: No override - always use platform-detected engine
 
 ## Assumptions
 
