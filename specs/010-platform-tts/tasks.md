@@ -19,8 +19,8 @@
 
 **Purpose**: Project initialization - verify existing structure and dependencies
 
-- [ ] T001 Verify existing src/ara/tts/ module structure is ready for extension
-- [ ] T002 [P] Review existing Synthesizer protocol in src/ara/tts/synthesizer.py
+- [X] T001 Verify existing src/ara/tts/ module structure is ready for extension
+- [X] T002 [P] Review existing Synthesizer protocol in src/ara/tts/synthesizer.py
 
 ---
 
@@ -30,9 +30,9 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T003 Create Platform enum in src/ara/tts/platform.py with MACOS, RASPBERRY_PI, OTHER values
-- [ ] T004 Implement detect_platform() function in src/ara/tts/platform.py using platform.system() and platform.machine()
-- [ ] T005 [P] Write unit tests for platform detection in tests/unit/test_platform_detection.py
+- [X] T003 Create Platform enum in src/ara/tts/platform.py with MACOS, RASPBERRY_PI, OTHER values
+- [X] T004 Implement detect_platform() function in src/ara/tts/platform.py using platform.system() and platform.machine()
+- [X] T005 [P] Write unit tests for platform detection in tests/unit/test_platform_detection.py
 
 **Checkpoint**: Platform detection ready - user story implementation can now begin
 
@@ -48,19 +48,19 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T006 [P] [US1] Unit tests for MacOSSynthesizer in tests/unit/test_macos_synthesizer.py
-- [ ] T007 [P] [US1] Integration test for platform TTS selection in tests/integration/test_platform_tts.py
+- [X] T006 [P] [US1] Unit tests for MacOSSynthesizer in tests/unit/test_macos_synthesizer.py
+- [X] T007 [P] [US1] Integration test for platform TTS selection in tests/integration/test_platform_tts.py
 
 ### Implementation for User Story 1
 
-- [ ] T008 [US1] Create MacOSSynthesizer class skeleton implementing Synthesizer protocol in src/ara/tts/macos.py
-- [ ] T009 [US1] Implement is_available property in MacOSSynthesizer checking for `say` command in src/ara/tts/macos.py
-- [ ] T010 [US1] Implement synthesize() method using subprocess.run with `say -v Samantha -o tempfile` in src/ara/tts/macos.py
-- [ ] T011 [US1] Implement AIFF to PCM conversion in MacOSSynthesizer._convert_aiff_to_pcm() in src/ara/tts/macos.py
-- [ ] T012 [US1] Implement set_voice(), set_speed(), get_available_voices() methods in src/ara/tts/macos.py
-- [ ] T013 [US1] Update create_synthesizer() in src/ara/tts/__init__.py to detect platform and select MacOSSynthesizer on macOS
-- [ ] T014 [US1] Add logging to create_synthesizer() to log which TTS engine was selected (FR-007)
-- [ ] T015 [US1] Export Platform and detect_platform from src/ara/tts/__init__.py
+- [X] T008 [US1] Create MacOSSynthesizer class skeleton implementing Synthesizer protocol in src/ara/tts/macos.py
+- [X] T009 [US1] Implement is_available property in MacOSSynthesizer checking for `say` command in src/ara/tts/macos.py
+- [X] T010 [US1] Implement synthesize() method using subprocess.run with `say -v Samantha -o tempfile` in src/ara/tts/macos.py
+- [X] T011 [US1] Implement AIFF to PCM conversion in MacOSSynthesizer._convert_aiff_to_pcm() in src/ara/tts/macos.py
+- [X] T012 [US1] Implement set_voice(), set_speed(), get_available_voices() methods in src/ara/tts/macos.py
+- [X] T013 [US1] Update create_synthesizer() in src/ara/tts/__init__.py to detect platform and select MacOSSynthesizer on macOS
+- [X] T014 [US1] Add logging to create_synthesizer() to log which TTS engine was selected (FR-007)
+- [X] T015 [US1] Export Platform and detect_platform from src/ara/tts/__init__.py
 
 **Checkpoint**: User Story 1 complete - macOS users get native TTS, Pi users get Piper automatically
 
@@ -74,15 +74,15 @@
 
 ### Tests for User Story 2
 
-- [ ] T016 [P] [US2] Unit test for voice quality metrics (latency < 500ms) in tests/unit/test_macos_synthesizer.py
-- [ ] T017 [P] [US2] Integration test for audio smoothness (no glitches) in tests/integration/test_platform_tts.py
+- [X] T016 [P] [US2] Unit test for voice quality metrics (latency < 500ms) in tests/unit/test_macos_synthesizer.py
+- [X] T017 [P] [US2] Integration test for audio smoothness (no glitches) in tests/integration/test_platform_tts.py
 
 ### Implementation for User Story 2
 
-- [ ] T018 [US2] Set "Samantha" as default voice in MacOSSynthesizer.__init__() in src/ara/tts/macos.py
-- [ ] T019 [US2] Add speed adjustment support using `say -r [rate]` parameter in src/ara/tts/macos.py
-- [ ] T020 [US2] Implement get_available_voices() using `say -v ?` command parsing in src/ara/tts/macos.py
-- [ ] T021 [US2] Verify audio sample rate (22050 Hz) matches existing playback pipeline in src/ara/tts/macos.py
+- [X] T018 [US2] Set "Samantha" as default voice in MacOSSynthesizer.__init__() in src/ara/tts/macos.py
+- [X] T019 [US2] Add speed adjustment support using `say -r [rate]` parameter in src/ara/tts/macos.py
+- [X] T020 [US2] Implement get_available_voices() using `say -v ?` command parsing in src/ara/tts/macos.py
+- [X] T021 [US2] Verify audio sample rate (22050 Hz) matches existing playback pipeline in src/ara/tts/macos.py
 
 **Checkpoint**: Voice quality verified - both platforms produce natural, smooth audio
 
@@ -96,16 +96,16 @@
 
 ### Tests for User Story 3
 
-- [ ] T022 [P] [US3] Unit test for fallback chain in create_synthesizer() in tests/unit/test_tts.py
-- [ ] T023 [P] [US3] Integration test for TTS failure recovery in tests/integration/test_platform_tts.py
+- [X] T022 [P] [US3] Unit test for fallback chain in create_synthesizer() in tests/unit/test_tts.py
+- [X] T023 [P] [US3] Integration test for TTS failure recovery in tests/integration/test_platform_tts.py
 
 ### Implementation for User Story 3
 
-- [ ] T024 [US3] Implement fallback chain in create_synthesizer(): macOS → Piper → Mock in src/ara/tts/__init__.py
-- [ ] T025 [US3] Add try/except around each synthesizer initialization in src/ara/tts/__init__.py
-- [ ] T026 [US3] Add logging for fallback events ("macOS TTS unavailable, falling back to Piper") in src/ara/tts/__init__.py
-- [ ] T027 [US3] Ensure MockSynthesizer is always available as final fallback in src/ara/tts/__init__.py
-- [ ] T028 [US3] Handle mid-synthesis failures gracefully in MacOSSynthesizer.synthesize() in src/ara/tts/macos.py
+- [X] T024 [US3] Implement fallback chain in create_synthesizer(): macOS → Piper → Mock in src/ara/tts/__init__.py
+- [X] T025 [US3] Add try/except around each synthesizer initialization in src/ara/tts/__init__.py
+- [X] T026 [US3] Add logging for fallback events ("macOS TTS unavailable, falling back to Piper") in src/ara/tts/__init__.py
+- [X] T027 [US3] Ensure MockSynthesizer is always available as final fallback in src/ara/tts/__init__.py
+- [X] T028 [US3] Handle mid-synthesis failures gracefully in MacOSSynthesizer.synthesize() in src/ara/tts/macos.py
 
 **Checkpoint**: All user stories complete - system never fails silently
 
@@ -115,11 +115,11 @@
 
 **Purpose**: Final improvements affecting all user stories
 
-- [ ] T029 [P] Run all tests and verify 100% pass rate
-- [ ] T030 [P] Run ruff linter and fix any issues in src/ara/tts/
-- [ ] T031 [P] Add type hints to all new functions in src/ara/tts/macos.py and src/ara/tts/platform.py
-- [ ] T032 Validate quickstart.md scenarios work end-to-end
-- [ ] T033 Run performance benchmark: verify TTS latency < 500ms on both platforms
+- [X] T029 [P] Run all tests and verify 100% pass rate
+- [X] T030 [P] Run ruff linter and fix any issues in src/ara/tts/
+- [X] T031 [P] Add type hints to all new functions in src/ara/tts/macos.py and src/ara/tts/platform.py
+- [X] T032 Validate quickstart.md scenarios work end-to-end
+- [X] T033 Run performance benchmark: verify TTS latency < 500ms on both platforms
 
 ---
 

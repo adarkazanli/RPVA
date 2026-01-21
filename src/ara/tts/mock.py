@@ -127,5 +127,10 @@ class MockSynthesizer:
         self._call_count = 0
         self._synthesized_texts.clear()
 
+    @property
+    def is_available(self) -> bool:
+        """Mock synthesizer is always available."""
+        return True
+
 
 __all__ = ["MockSynthesizer"]
