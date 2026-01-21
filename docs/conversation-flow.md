@@ -15,44 +15,49 @@ flowchart TD
     RECORD --> |Speech detected| TRANSCRIBE[5. Transcribe audio]
     TRANSCRIBE --> |Empty| LISTEN
     TRANSCRIBE --> CLEAN[6. Clean transcript]
-    CLEAN --> MODE{7. Note mode?}
+    CLEAN --> CLASSIFY{7. Classify intent}
 
-    MODE --> |Yes| NOTE_INTENT[8. Force NOTE_CAPTURE intent]
-    MODE --> |No| CLASSIFY[9. Classify intent]
+    CLASSIFY --> |7a: Note/Remember| NOTE_HANDLER[Note Handler]
+    CLASSIFY --> |7b: Ask Claude| CLAUDE_HANDLER[Claude Handler]
+    CLASSIFY --> |7c: Search/Google| WEB_HANDLER[Tavily Search]
+    CLASSIFY --> |7d: Ask Perplexity| PERPLEXITY_HANDLER[Perplexity Search]
+    CLASSIFY --> |7z: Other| QUERY_ROUTER[QueryRouter]
 
-    NOTE_INTENT --> HANDLE_INTENT
-    CLASSIFY --> HANDLE_INTENT[10. Handle intent]
+    NOTE_HANDLER --> SYNTHESIZE[8. Synthesize response]
+    CLAUDE_HANDLER --> SYNTHESIZE
+    WEB_HANDLER --> SYNTHESIZE
+    PERPLEXITY_HANDLER --> SYNTHESIZE
+    QUERY_ROUTER --> SYNTHESIZE
 
-    HANDLE_INTENT --> SYNTHESIZE[11. Synthesize response]
-    SYNTHESIZE --> PLAY[12. Play response audio]
+    SYNTHESIZE --> PLAY[9. Play response audio]
 
-    PLAY --> NOTE_CHECK{13. Note mode?}
+    PLAY --> NOTE_CHECK{10. Note mode?}
     NOTE_CHECK --> |Yes| LISTEN
-    NOTE_CHECK --> |No| ANYTHING_ELSE[14. Ask Anything else?]
+    NOTE_CHECK --> |No| ANYTHING_ELSE[11. Ask Anything else?]
 
-    ANYTHING_ELSE --> AE_LISTEN[15. Listen for response]
-    AE_LISTEN --> |No response/silence| GOODBYE[22. Say goodbye]
-    AE_LISTEN --> |Response detected| AE_TRANSCRIBE[16. Transcribe response]
+    ANYTHING_ELSE --> AE_LISTEN[12. Listen for response]
+    AE_LISTEN --> |No response/silence| GOODBYE[19. Say goodbye]
+    AE_LISTEN --> |Response detected| AE_TRANSCRIBE[13. Transcribe response]
 
-    AE_TRANSCRIBE --> AE_CHECK{17. User response}
+    AE_TRANSCRIBE --> AE_CHECK{14. User response}
     AE_CHECK --> |No/Thanks/negative| GOODBYE
-    AE_CHECK --> |Yes/affirmative only| PROMPT[18. Ask What else?]
-    AE_CHECK --> |Contains question| PROCESS_FOLLOWUP[19. Process question]
+    AE_CHECK --> |Yes/affirmative only| PROMPT[15. Ask What else?]
+    AE_CHECK --> |Contains question| PROCESS_FOLLOWUP[16. Process question]
 
-    PROMPT --> PROMPT_LISTEN[18a. Listen for question]
+    PROMPT --> PROMPT_LISTEN[15a. Listen for question]
     PROMPT_LISTEN --> |No response| GOODBYE
     PROMPT_LISTEN --> |Question received| PROCESS_FOLLOWUP
 
-    PROCESS_FOLLOWUP --> CLASSIFY_FOLLOWUP[20. Classify follow-up intent]
-    CLASSIFY_FOLLOWUP --> CLAUDE_CHECK{21. Previous was Claude?}
+    PROCESS_FOLLOWUP --> CLASSIFY_FOLLOWUP[17. Classify follow-up intent]
+    CLASSIFY_FOLLOWUP --> CLAUDE_CHECK{18. Previous was Claude?}
 
-    CLAUDE_CHECK --> |Yes and general question| ROUTE_CLAUDE[21a. Route to Claude]
-    CLAUDE_CHECK --> |No or specific intent| HANDLE_FOLLOWUP[21b. Handle intent normally]
+    CLAUDE_CHECK --> |Yes and general question| ROUTE_CLAUDE[18a. Route to Claude]
+    CLAUDE_CHECK --> |No or specific intent| HANDLE_FOLLOWUP[18b. Handle intent normally]
 
-    ROUTE_CLAUDE --> SYNTH_FOLLOWUP[21c. Synthesize response]
+    ROUTE_CLAUDE --> SYNTH_FOLLOWUP[18c. Synthesize response]
     HANDLE_FOLLOWUP --> SYNTH_FOLLOWUP
 
-    SYNTH_FOLLOWUP --> PLAY_FOLLOWUP[21d. Play response]
+    SYNTH_FOLLOWUP --> PLAY_FOLLOWUP[18d. Play response]
     PLAY_FOLLOWUP --> ANYTHING_ELSE
 
     GOODBYE --> LISTEN
@@ -68,26 +73,29 @@ flowchart TD
 | 4 | Record user speech - Capture audio |
 | 5 | Transcribe audio - Speech-to-text |
 | 6 | Clean transcript - Remove filler words |
-| 7 | Note mode? - Check if in note-taking mode |
-| 8 | Force NOTE_CAPTURE intent - Override classification |
-| 9 | Classify intent - Determine user intent |
-| 10 | Handle intent - Route to appropriate handler |
-| 11 | Synthesize response - Generate TTS audio |
-| 12 | Play response audio - Speak response |
-| 13 | Note mode? - Check for continuation |
-| 14 | Ask "Anything else?" - Prompt for follow-up |
-| 15 | Listen for response - Wait for user reply |
-| 16 | Transcribe response - Convert reply to text |
-| 17 | User response - Decision point |
-| 18 | Ask "What else?" - Prompt for question |
-| 18a | Listen for question - Wait for follow-up |
-| 19 | Process question - Handle follow-up |
-| 20 | Classify follow-up intent - Categorize |
-| 21 | Previous was Claude? - Check conversation context |
-| 21a | Route to Claude - Continue Claude conversation |
-| 21b | Handle intent normally - Standard processing |
-| 21c | Synthesize response - Generate follow-up TTS |
-| 21d | Play response - Speak follow-up |
+| 7 | Classify intent - Route based on voice phrase |
+| 7a | Note Handler - "Note that...", "Remember..." |
+| 7b | Claude Handler - "Ask Claude...", "Hey Claude..." |
+| 7c | Tavily Search - "Search for...", "Google..." |
+| 7d | Perplexity Search - "Ask Perplexity..." |
+| 7z | QueryRouter - Smart routing for other queries |
+| 8 | Synthesize response - Generate TTS audio |
+| 9 | Play response audio - Speak response |
+| 10 | Note mode? - Check for continuation |
+| 11 | Ask "Anything else?" - Prompt for follow-up |
+| 12 | Listen for response - Wait for user reply |
+| 13 | Transcribe response - Convert reply to text |
+| 14 | User response - Decision point |
+| 15 | Ask "What else?" - Prompt for question |
+| 15a | Listen for question - Wait for follow-up |
+| 16 | Process question - Handle follow-up |
+| 17 | Classify follow-up intent - Categorize |
+| 18 | Previous was Claude? - Check conversation context |
+| 18a | Route to Claude - Continue Claude conversation |
+| 18b | Handle intent normally - Standard processing |
+| 18c | Synthesize response - Generate follow-up TTS |
+| 18d | Play response - Speak follow-up |
+| 19 | Say goodbye - End interaction |
 | 22 | Say goodbye - End interaction |
 
 ## Detailed Intent Classification (Step 7 Routing)
